@@ -1,0 +1,22 @@
+[
+  {
+    "code": "SUP-TECH",
+    "label": "Tech Distribution",
+    "category": "CONVENTIONNE",
+    "email": "contact@tech-distribution.test",
+    "startDate": "2024-01-15",
+    "address": "10 Technology Avenue",
+    "registrationNumber": "MF-TECH-001",
+    "sectorCodes": ["IT"]
+  },
+  {
+    "code": "SUP-OFFICE",
+    "label": "Office Partners",
+    "category": "ORDINAIRE",
+    "email": "contact@office-partners.test",
+    "startDate": "2024-02-20",
+    "address": "25 Business Street",
+    "registrationNumber": "MF-OFFICE-002",
+    "sectorCodes": ["OFFICE", "FURNITURE"]
+  }
+]

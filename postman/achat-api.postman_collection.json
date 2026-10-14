@@ -1,0 +1,103 @@
+{
+  "info": {
+    "_postman_id": "7dfc0d36-1a5e-4b86-a5e2-achat-api-dev",
+    "name": "Achat API",
+    "description": "Development requests for the Achat Spring Boot API. Run the seed first, then use the seeded IDs in requests that require relationships.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8089"},
+    {"key": "stockId", "value": "1"},
+    {"key": "categoryId", "value": "1"},
+    {"key": "productId", "value": "1"},
+    {"key": "sectorId", "value": "1"},
+    {"key": "supplierId", "value": "1"},
+    {"key": "operatorId", "value": "1"},
+    {"key": "invoiceId", "value": "1"},
+    {"key": "paymentId", "value": "1"}
+  ],
+  "auth": {"type": "noauth"},
+  "item": [
+    {
+      "name": "Documentation and health",
+      "item": [
+        {
+          "name": "Swagger UI",
+          "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/swagger-ui/index.html"},
+          "response": []
+        },
+        {
+          "name": "OpenAPI JSON",
+          "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/v3/api-docs"},
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/actuator/health"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stocks",
+      "item": [
+        {"name": "List stocks", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/stocks"}, "response": []},
+        {
+          "name": "Create stock",
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"libelleStock\":\"Postman stock\",\"qte\":25,\"qteMin\":5}"}, "url": "{{baseUrl}}/stocks"},
+          "response": []
+        },
+        {"name": "Get stock", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/stocks/{{stockId}}"}, "response": []}
+      ]
+    },
+    {
+      "name": "Products and categories",
+      "item": [
+        {"name": "List products", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/produits"}, "response": []},
+        {"name": "List product categories", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/categories-produits"}, "response": []},
+        {"name": "Get product", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/produits/{{productId}}"}, "response": []},
+        {
+          "name": "Create product",
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"codeProduit\":\"PROD-POSTMAN\",\"libelleProduit\":\"Postman product\",\"prix\":12.5,\"dateCreation\":\"2025-01-01\",\"dateDerniereModification\":\"2025-01-01\",\"stock\":{\"idStock\":{{stockId}}},\"categorieProduit\":{\"idCategorieProduit\":{{categoryId}}}}"}, "url": "{{baseUrl}}/produits"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Suppliers and sectors",
+      "item": [
+        {"name": "List suppliers", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/fournisseurs"}, "response": []},
+        {"name": "List activity sectors", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/secteurs-activite"}, "response": []},
+        {"name": "Get supplier", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/fournisseurs/{{supplierId}}"}, "response": []},
+        {"name": "Assign sector to supplier", "request": {"method": "PUT", "header": [], "url": "{{baseUrl}}/fournisseurs/{{supplierId}}/secteurs-activite/{{sectorId}}"}, "response": []}
+      ]
+    },
+    {
+      "name": "Operators",
+      "item": [
+        {"name": "List operators", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/operateurs"}, "response": []},
+        {"name": "Get operator", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/operateurs/{{operatorId}}"}, "response": []}
+      ]
+    },
+    {
+      "name": "Invoices",
+      "item": [
+        {"name": "List invoices", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/facture/retrieve-all-factures"}, "response": []},
+        {"name": "Get invoice", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/facture/retrieve-facture/{{invoiceId}}"}, "response": []},
+        {"name": "Invoices by supplier", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/facture/getFactureByFournisseur/{{supplierId}}"}, "response": []},
+        {"name": "Cancel invoice", "request": {"method": "PUT", "header": [], "url": "{{baseUrl}}/facture/cancel-facture/{{invoiceId}}"}, "response": []},
+        {"name": "Assign operator to invoice", "request": {"method": "PUT", "header": [], "url": "{{baseUrl}}/facture/assignOperateurToFacture/{{operatorId}}/{{invoiceId}}"}, "response": []},
+        {"name": "Recovery percentage", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/facture/pourcentageRecouvrement/2025-01-01/2025-12-31"}, "response": []}
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {"name": "List payments", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/reglements"}, "response": []},
+        {"name": "Get payments for invoice", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/reglements/facture/{{invoiceId}}"}, "response": []},
+        {"name": "Revenue between dates", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/reglements/revenue?startDate=2025-01-01&endDate=2025-12-31"}, "response": []},
+        {"name": "Get payment", "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/reglements/{{paymentId}}"}, "response": []}
+      ]
+    }
+  ]
+}

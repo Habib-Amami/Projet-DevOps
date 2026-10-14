@@ -1,0 +1,4 @@
+[
+  {"label": "Main warehouse", "quantity": 100, "minimumQuantity": 10},
+  {"label": "Secondary warehouse", "quantity": 40, "minimumQuantity": 5}
+]

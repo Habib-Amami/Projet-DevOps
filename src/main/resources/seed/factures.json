@@ -1,0 +1,27 @@
+[
+  {
+    "supplierCode": "SUP-TECH",
+    "date": "2025-01-10",
+    "amount": 55.5,
+    "discount": 0,
+    "details": [
+      {"productCode": "PROD-MOUSE", "quantity": 1, "total": 25.0, "discountPercentage": 0, "discountAmount": 0},
+      {"productCode": "PROD-PAPER", "quantity": 5, "total": 27.5, "discountPercentage": 0, "discountAmount": 0}
+    ],
+    "payments": [
+      {"paid": 55.5, "remaining": 0, "paidStatus": true, "date": "2025-01-15"}
+    ]
+  },
+  {
+    "supplierCode": "SUP-OFFICE",
+    "date": "2025-02-05",
+    "amount": 75.0,
+    "discount": 5.0,
+    "details": [
+      {"productCode": "PROD-PAPER", "quantity": 10, "total": 55.0, "discountPercentage": 10, "discountAmount": 5.0}
+    ],
+    "payments": [
+      {"paid": 35.0, "remaining": 40.0, "paidStatus": false, "date": "2025-02-10"}
+    ]
+  }
+]

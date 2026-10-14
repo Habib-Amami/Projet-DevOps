@@ -1,0 +1,16 @@
+[
+  {
+    "code": "PROD-PAPER",
+    "label": "Printer paper",
+    "price": 5.5,
+    "stockLabel": "Main warehouse",
+    "categoryCode": "CAT-OFFICE"
+  },
+  {
+    "code": "PROD-MOUSE",
+    "label": "Wireless mouse",
+    "price": 25.0,
+    "stockLabel": "Secondary warehouse",
+    "categoryCode": "CAT-IT"
+  }
+]

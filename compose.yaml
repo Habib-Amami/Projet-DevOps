@@ -1,0 +1,14 @@
+services:
+  grafana-lgtm:
+    image: 'grafana/otel-lgtm:latest'
+    ports:
+      - '3000:3000'
+      - '4317:4317'
+      - '4318:4318'
+  mysql:
+    image: 'mysql:latest'
+    environment:
+      - 'MYSQL_DATABASE=${MYSQL_DATABASE:-mydatabase}'
+      - 'MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-change-me}'
+    ports:
+      - '3306:3306'
