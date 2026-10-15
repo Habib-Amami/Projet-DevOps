@@ -1,0 +1,68 @@
+<app-page-header [title]="id() ? 'Edit supplier' : 'New supplier'" backLink="/fournisseurs" />
+<app-async-state [state]="existing()" (retry)="load()">
+  <form class="form" [formGroup]="form" (ngSubmit)="submit()">
+    <div class="form-row">
+      <mat-form-field>
+        <mat-label>Code</mat-label>
+        <input matInput formControlName="code" />
+        <mat-error>{{ fieldError(form.controls.code) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Category</mat-label>
+        <mat-select formControlName="categorieFournisseur">
+          @for (categorie of categories; track categorie) {
+            <mat-option [value]="categorie">{{ categorie }}</mat-option>
+          }
+        </mat-select>
+        <mat-error>{{ fieldError(form.controls.categorieFournisseur) }}</mat-error>
+      </mat-form-field>
+    </div>
+    <mat-form-field>
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="libelle" />
+      <mat-error>{{ fieldError(form.controls.libelle) }}</mat-error>
+    </mat-form-field>
+
+    <h2 class="form-section-title">Supplier details</h2>
+    @if (id()) {
+      <mat-checkbox [checked]="withDetail()" (change)="toggleDetail($event.checked)">
+        Replace the existing details
+      </mat-checkbox>
+    }
+    @if (withDetail()) {
+      <div formGroupName="detail" class="form">
+        <div class="form-row">
+          <mat-form-field>
+            <mat-label>Registration number</mat-label>
+            <input matInput formControlName="matricule" />
+            <mat-error>{{ fieldError(form.controls.detail.controls.matricule) }}</mat-error>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Collaboration start</mat-label>
+            <input matInput [matDatepicker]="picker" formControlName="dateDebutCollaboration" />
+            <mat-datepicker-toggle matIconSuffix [for]="picker" />
+            <mat-datepicker #picker />
+            <mat-error>
+              {{ fieldError(form.controls.detail.controls.dateDebutCollaboration) }}
+            </mat-error>
+          </mat-form-field>
+        </div>
+        <mat-form-field>
+          <mat-label>Address</mat-label>
+          <input matInput formControlName="adresse" />
+          <mat-error>{{ fieldError(form.controls.detail.controls.adresse) }}</mat-error>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" />
+          <mat-error>{{ fieldError(form.controls.detail.controls.email) }}</mat-error>
+        </mat-form-field>
+      </div>
+    }
+
+    <div class="form-actions">
+      <button mat-flat-button type="submit" [disabled]="saving()">Save</button>
+      <a mat-button routerLink="/fournisseurs">Cancel</a>
+    </div>
+  </form>
+</app-async-state>

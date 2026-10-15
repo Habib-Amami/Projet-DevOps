@@ -1,0 +1,74 @@
+<app-async-state [state]="state()" (retry)="reload()">
+  @if (state().data; as data) {
+    <app-page-header [title]="data.fournisseur.libelle" backLink="/fournisseurs">
+      <a mat-stroked-button routerLink="edit"><mat-icon>edit</mat-icon> Edit</a>
+      <button mat-flat-button class="danger" type="button" (click)="remove(data.fournisseur)">
+        <mat-icon>delete</mat-icon> Delete
+      </button>
+    </app-page-header>
+
+    <dl class="details">
+      <dt>ID</dt>
+      <dd>{{ data.fournisseur.idFournisseur }}</dd>
+      <dt>Code</dt>
+      <dd>{{ data.fournisseur.code }}</dd>
+      <dt>Name</dt>
+      <dd>{{ data.fournisseur.libelle }}</dd>
+      <dt>Category</dt>
+      <dd>{{ data.fournisseur.categorieFournisseur }}</dd>
+      <dt>Details ID</dt>
+      <dd>{{ data.fournisseur.detailFournisseurId ?? '—' }}</dd>
+    </dl>
+
+    <section class="section">
+      <h2 class="form-section-title">Business sectors</h2>
+      <mat-chip-set aria-label="Assigned business sectors">
+        @for (secteur of assignedSecteurs(); track secteur.idSecteurActivite) {
+          <mat-chip>{{ secteur.libelleSecteurActivite }}</mat-chip>
+        } @empty {
+          <span>No sector assigned.</span>
+        }
+      </mat-chip-set>
+
+      @if (availableSecteurs().length) {
+        <div class="toolbar-row section">
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Sector to assign</mat-label>
+            <mat-select [formControl]="secteurControl">
+              @for (secteur of availableSecteurs(); track secteur.idSecteurActivite) {
+                <mat-option [value]="secteur.idSecteurActivite">
+                  {{ secteur.libelleSecteurActivite }}
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <button
+            mat-stroked-button
+            type="button"
+            [disabled]="secteurControl.invalid || assigning()"
+            (click)="assignSecteur(data.fournisseur)"
+          >
+            Assign
+          </button>
+        </div>
+      }
+    </section>
+
+    <section class="section">
+      <h2 class="form-section-title">Invoices</h2>
+      <app-async-state [state]="factures()" (retry)="reload()">
+        @if (factures().data; as rows) {
+          @if (rows.length) {
+            <app-data-table
+              [rows]="rows"
+              [columns]="factureColumns"
+              (rowClick)="openFacture($event)"
+            />
+          } @else {
+            <app-empty-state message="No invoices for this supplier." />
+          }
+        }
+      </app-async-state>
+    </section>
+  }
+</app-async-state>
