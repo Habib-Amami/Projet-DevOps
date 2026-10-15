@@ -10,12 +10,14 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import lombok.extern.slf4j.Slf4j;
 import org.example.achat.stock.entities.Stock;
 import org.example.achat.stock.services.IStockService;
 
 import java.util.List;
 
 @RestController
+@Slf4j
 @RequestMapping("/stocks")
 @CrossOrigin("*")
 @Tag(name = "Stocks", description = "Stock inventory management")
@@ -30,9 +32,11 @@ public class StockRestController {
 	@GetMapping
 	@Operation(summary = "List stocks", description = "Returns all stocks.")
 	public List<StockResponse> getStocks() {
-		return stockService.retrieveAllStocks().stream()
+		List<StockResponse> responses = stockService.retrieveAllStocks().stream()
 				.map(this::toResponse)
 				.toList();
+		log.info("Returning {} stocks", responses.size());
+		return responses;
 	}
 
 	@GetMapping("/{stockId}")
@@ -42,6 +46,7 @@ public class StockRestController {
 			@ApiResponse(responseCode = "404", description = "Stock not found")
 	})
 	public StockResponse retrieveStock(@PathVariable Long stockId) {
+		log.debug("Retrieving stock {} through REST API", stockId);
 		return toResponse(stockService.retrieveStock(stockId));
 	}
 
@@ -49,6 +54,7 @@ public class StockRestController {
 	@Operation(summary = "Create a stock", description = "Creates a stock with a label and quantity thresholds.")
 	@ApiResponse(responseCode = "201", description = "Stock created")
 	public ResponseEntity<StockResponse> addStock(@Valid @RequestBody Stock stock) {
+		log.info("Creating stock '{}' through REST API", stock.getLibelleStock());
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(toResponse(stockService.addStock(stock)));
 	}
@@ -60,6 +66,7 @@ public class StockRestController {
 			@ApiResponse(responseCode = "404", description = "Stock not found")
 	})
 	public ResponseEntity<Void> removeStock(@PathVariable Long stockId) {
+		log.info("Deleting stock {} through REST API", stockId);
 		stockService.deleteStock(stockId);
 		return ResponseEntity.noContent().build();
 	}
@@ -73,6 +80,7 @@ public class StockRestController {
 	public ResponseEntity<StockResponse> modifyStock(
 			@PathVariable Long stockId,
 			@Valid @RequestBody Stock stock) {
+		log.info("Updating stock {} through REST API", stockId);
 		stock.setIdStock(stockId);
 		return ResponseEntity.ok(toResponse(stockService.updateStock(stock)));
 	}
