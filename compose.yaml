@@ -1,0 +1,82 @@
+# =============================================================================
+# Achat - full stack (MySQL + Spring Boot API + Angular UI)
+#
+#   docker compose up -d --build          # http://localhost:4200
+#   docker compose --profile observability up -d   # + Grafana LGTM on :3000
+#
+# Configuration is read from an optional .env file in this folder
+# (see .env.example). The values below are development defaults.
+# =============================================================================
+
+name: achat
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-achatdb}
+      # The MySQL image refuses "root" here: root is configured by
+      # MYSQL_ROOT_PASSWORD, DB_USERNAME/DB_PASSWORD create a regular app user.
+      MYSQL_USER: ${DB_USERNAME:-achat_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-change-me}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+    image: achat-backend:local
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SERVER_PORT: "8089"
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-achatdb}?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
+      DB_USERNAME: ${DB_USERNAME:-achat_user}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8089}:8089"
+
+  frontend:
+    build:
+      context: ./frontend
+    image: achat-frontend:local
+    restart: unless-stopped
+    environment:
+      # nginx proxies /api/* to this origin (same-origin for the browser).
+      BACKEND_URL: http://backend:8089
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Host 4200 to avoid Jenkins (usually :8080); container listens on 8080.
+      - "${FRONTEND_PORT:-4200}:8080"
+
+  # Optional observability stack: docker compose --profile observability up -d
+  grafana-lgtm:
+    profiles: ["observability"]
+    image: grafana/otel-lgtm:latest
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+      - "4317:4317"
+      - "4318:4318"
+
+volumes:
+  mysql-data:
