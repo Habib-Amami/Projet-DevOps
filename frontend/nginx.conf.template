@@ -1,0 +1,64 @@
+# Rendered at container start by /docker-entrypoint.d/20-envsubst-on-templates.sh.
+# Only the ${...} placeholders are substituted; nginx variables ($uri, ...) are kept.
+
+server {
+    listen 8080;
+    server_name _;
+
+    # Resolve the backend at request time (not at startup) so the frontend can
+    # boot before the backend and survive backend container restarts.
+    # 127.0.0.11 is Docker's embedded DNS; override DNS_RESOLVER on Kubernetes.
+    resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+    set $api_upstream ${BACKEND_URL};
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    # Hashed build assets: safe to cache forever.
+    location ~* \.(?:js|css|woff2?|ttf|eot|svg|png|jpe?g|gif|ico|webp|avif)$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+    }
+
+    # Same contract as the dev proxy (proxy.conf.json):
+    # /api/facture/... -> ${BACKEND_URL}/facture/...
+    location /api/ {
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass $api_upstream;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        client_max_body_size 10m;
+    }
+
+    # Angular client-side routing: deep links fall back to the SPA shell.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Always revalidate the shell so a new deployment is picked up.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    # Container health endpoint.
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+}
