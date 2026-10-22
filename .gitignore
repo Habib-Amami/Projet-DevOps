@@ -1,0 +1,6 @@
+# Local environment (copy .env.example to .env)
+.env
+
+# IDE
+.idea/
+.vscode/
