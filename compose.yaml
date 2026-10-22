@@ -73,9 +73,8 @@ services:
       # Host 4200 to avoid Jenkins (usually :8080); container listens on 8080.
       - "${FRONTEND_PORT:-4200}:8080"
 
-  # Optional observability stack: docker compose --profile observability up -d
+  # Local LGTM stack: Grafana, Loki, Tempo, Prometheus and the OTel collector.
   grafana-lgtm:
-    profiles: ["observability"]
     image: grafana/otel-lgtm:latest
     restart: unless-stopped
     ports:
@@ -83,5 +82,24 @@ services:
       - "4317:4317"
       - "4318:4318"
 
+  # Reads Docker container logs and pushes them to Loki, like the cluster
+  # Alloy DaemonSet does with pod logs. The socket mount is local-only.
+  alloy:
+    image: grafana/alloy:latest
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      grafana-lgtm:
+        condition: service_healthy
+
 volumes:
   mysql-data:
+  alloy-data:
