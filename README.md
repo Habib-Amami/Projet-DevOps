@@ -32,10 +32,13 @@ builds and tests every change.
 - **Invoices** - list, create, detail, cancel/archive, invoice lines, assign an
   operator, recovery-rate statistics.
 - **Payments** - list, detail, delete, filter by invoice, revenue over a period.
-- **Development data** - an idempotent seeder fills the database on first start
-  when the `dev` profile and `APP_SEED_ENABLED=true` are active.
-- **No authentication in `dev`** - the UI has no login page and the API is open
-  for local testing.
+- **Database migrations** - Flyway owns the schema (`V1__init.sql` baseline) and
+  Hibernate validates it at startup.
+- **Development data** - an idempotent seeder fills the database when
+  `APP_SEED_ENABLED=true`; it is enabled by the local Compose stack and disabled
+  by default for the cluster.
+- **No end-user authentication** - the UI has no login page and the API is open
+  for local testing; in production the API stays internal behind nginx.
 
 ## Architecture
 
@@ -60,8 +63,13 @@ Browser ────────────────────────
                               │ volume: mysql-data  │
                               └─────────────────────┘
 
-             Optional profile: grafana-lgtm (:3000, :4317, :4318)
+             Observability: grafana-lgtm (:3000, :4317, :4318) + Alloy
 ```
+
+The backend pushes metrics and traces to LGTM over OTLP. Alloy reads container
+stdout/stderr and pushes logs to Loki, so Grafana shows metrics, traces and logs
+without any logging code in the application. Profiling (Pyroscope) is included
+in the LGTM image but is intentionally not configured.
 
 The browser only talks to nginx. nginx serves the Angular bundle and forwards
 `/api/*` to `http://backend:8089/*`, so there is no CORS setup. This mirrors the
@@ -73,7 +81,7 @@ Angular dev proxy (`frontend/proxy.conf.json`) used with `ng serve`.
 | ---------- | ---------- |
 | Frontend   | Angular 21, Angular Material/CDK, TypeScript 5.9, signals, Reactive Forms, SCSS, Vitest |
 | Backend    | Java 21, Spring Boot 4.1.1, Spring Web MVC, Spring Data JPA, Spring Security, Bean Validation, Actuator, springdoc OpenAPI, Micrometer/OpenTelemetry |
-| Database   | MySQL 8.4 |
+| Database   | MySQL 8.4, Flyway migrations with Hibernate schema validation |
 | Containers | Multi-stage Dockerfiles, unprivileged nginx, Docker Compose |
 | CI         | Jenkins (`Jenkinsfile`) |
 
@@ -81,9 +89,11 @@ Angular dev proxy (`frontend/proxy.conf.json`) used with `ng serve`.
 
 ```
 .
-├── compose.yaml              # full stack: MySQL + backend + frontend (+ optional LGTM)
+├── compose.yaml              # full stack: MySQL + backend + frontend + LGTM + Alloy
 ├── .env.example              # template for the root Compose configuration
 ├── Jenkinsfile               # CI: backend verify + frontend test/build
+├── observability/
+│   └── alloy/config.alloy    # local Docker log collection for Loki
 ├── backend/
 │   ├── Dockerfile            # multi-stage Spring Boot image
 │   ├── compose.yaml          # standalone helper: MySQL + Grafana for local Maven runs
@@ -121,7 +131,7 @@ Angular dev proxy (`frontend/proxy.conf.json`) used with `ng serve`.
    docker compose up -d --build
    ```
 
-3. Wait until all services are healthy:
+3. Wait until the services are running (and healthy where a healthcheck exists):
 
    ```bash
    docker compose ps
@@ -134,11 +144,13 @@ Angular dev proxy (`frontend/proxy.conf.json`) used with `ng serve`.
    | Web UI            | <http://localhost:4200> |
    | API / Swagger UI  | <http://localhost:8089/swagger-ui/index.html> |
    | API health        | <http://localhost:8089/actuator/health> |
-   | Grafana (profile) | <http://localhost:3000> |
+   | Grafana           | <http://localhost:3000> (`admin` / `admin`) |
 
 The first start creates the `achat_mysql-data` volume, the `achatdb` database,
 the `achat_user` account and the development seed data. Later starts reuse the
-existing volume.
+existing volume. Local Compose sets `APP_SEED_ENABLED=true`,
+`SPRINGDOC_ENABLED=true` and the OTLP endpoints; none of that is baked into the
+application image.
 
 Useful commands:
 
@@ -148,7 +160,12 @@ Useful commands:
 | `docker compose up -d --build frontend` | Rebuild only the UI after a change |
 | `docker compose down` | Stop the stack, keep database data |
 | `docker compose down -v` | Stop the stack **and delete the database volume** |
-| `docker compose --profile observability up -d` | Also start Grafana LGTM |
+| `OTEL_METRICS_ENABLED=false OTEL_TRACING_ENABLED=false docker compose up -d mysql backend frontend` | Start the app without LGTM/Alloy |
+| `docker compose logs -f alloy` | Follow the log shipper |
+
+OTLP export is enabled by default in Compose because LGTM is part of the stack.
+If you intentionally skip LGTM/Alloy, disable it as shown above, otherwise the
+backend will log connection errors while trying to reach the collector.
 
 ## How Compose fits in this project
 
@@ -162,8 +179,9 @@ There are two Compose files, with different purposes:
 - **`backend/compose.yaml` is only a development helper.** It starts MySQL
   (published on host port `3306`) and an optional Grafana LGTM stack while the
   backend runs from Maven (`./mvnw spring-boot:run`) and the frontend runs from
-  the Angular CLI (`npm start`). It does not build the applications and is not
-  the full stack.
+  the Angular CLI (`npm start`). It does not build the applications, does not
+  ship container logs, and is not the full stack. Use the root Compose file when
+  you want the complete observability setup.
 
 The root Compose file does **not** publish MySQL to the host. If you run the
 backend from Maven, use a locally installed MySQL or the `backend/compose.yaml`
@@ -176,7 +194,8 @@ helper instead.
 | `mysql` | `mysql:8.4` | `3306` | – | Healthcheck, named volume `mysql-data` |
 | `backend` | `./backend` | `8089` | `8089` | Waits for MySQL, healthcheck from its Dockerfile |
 | `frontend` | `./frontend` | `8080` | `4200` | Waits for the backend, nginx proxies `/api` |
-| `grafana-lgtm` | `grafana/otel-lgtm:latest` | `3000`, `4317`, `4318` | same | Optional `observability` profile |
+| `grafana-lgtm` | `grafana/otel-lgtm:latest` | `3000`, `4317`, `4318` | same | Grafana, Loki, Tempo, Prometheus, OTel collector |
+| `alloy` | `grafana/alloy:latest` | `12345` internal | – | Reads Docker logs and pushes them to Loki |
 
 The frontend is published on **4200** because Jenkins and many other tools use
 `8080`. Change it with `FRONTEND_PORT` if needed. Inside the container nginx
@@ -193,12 +212,21 @@ Compose reads the optional `.env` file in the repository root. Start from
 | `MYSQL_ROOT_PASSWORD` | `root-change-me` | MySQL | Admin (`root`) password |
 | `DB_USERNAME` | `achat_user` | MySQL, backend | Application account; must not be `root` |
 | `DB_PASSWORD` | `change-me` | MySQL, backend | Application password (use a different value from root) |
-| `SPRING_PROFILES_ACTIVE` | `dev` | backend | `dev` disables API security and enables seeding |
-| `JPA_DDL_AUTO` | `update` | backend | Hibernate schema strategy |
+| `JPA_DDL_AUTO` | `validate` | backend | Hibernate validates the Flyway-managed schema |
 | `APP_SEED_ENABLED` | `true` | backend | Insert development data on startup |
+| `SPRINGDOC_ENABLED` | `true` | backend | Enable Swagger/OpenAPI; set `false` in the cluster if not needed |
+| `OTEL_METRICS_ENABLED` | `true` | backend | Export metrics over OTLP |
+| `OTEL_TRACING_ENABLED` | `true` | backend | Export traces over OTLP |
 | `FRONTEND_PORT` | `4200` | Compose | Host port for the web UI |
 | `BACKEND_PORT` | `8089` | Compose | Host port for the API |
-| `GRAFANA_PORT` | `3000` | Compose | Host port for Grafana (optional profile) |
+| `GRAFANA_PORT` | `3000` | Compose | Host port for Grafana |
+
+The OTLP endpoints default to the Compose service name
+`http://grafana-lgtm:4318/v1/{metrics,traces}`. Override
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` only when the collector has a different
+address. There is no Spring profile to switch: the same image runs locally and in
+the cluster, and only these environment values differ.
 
 > **Database credentials are applied only once**, when the volume is first
 > initialized. Editing `.env` later does not change existing MySQL accounts.
@@ -208,6 +236,30 @@ Compose reads the optional `.env` file in the repository root. Start from
 For running the backend outside Compose, see
 [`backend/README.md`](backend/README.md); it uses the separate
 [`backend/.env`](backend/.env.example) file.
+
+## Observability
+
+The local Compose stack runs Grafana LGTM and Alloy by default.
+
+| Signal | Path | Backend |
+| ------ | ---- | ------- |
+| Metrics | backend → OTLP → LGTM collector | Prometheus |
+| Traces | backend → OTLP → LGTM collector | Tempo |
+| Logs | container stdout → Alloy → Loki | Loki |
+| Profiles | not configured | Pyroscope (empty) |
+
+Open <http://localhost:3000> and use `admin` / `admin`:
+
+- **Dashboards** → `JVM Overview (OpenTelemetry)` or `RED Metrics`
+- **Explore → Prometheus** → `{service_name="achat"}`
+- **Explore → Tempo** → search service `achat`
+- **Explore → Loki** → `{job="docker", service="backend"}`
+
+The application exports metrics and traces itself. It does **not** export logs:
+Spring Boot's OTLP logging requires an extra Logback appender, and that would
+still miss nginx, MySQL and container crash output. Alloy is the log collector,
+matching the Alloy DaemonSet used in the cluster. Profiling is intentionally out
+of scope.
 
 ## Local development with native tooling
 
@@ -315,19 +367,25 @@ conflict with the running stack.
 
 ## Security and production notes
 
-This repository is configured for **development**:
+The root Compose setup is configured for **local development**:
 
-- The `dev` profile disables API authentication and enables seed data.
+- `APP_SEED_ENABLED=true` loads the development data.
+- `SPRINGDOC_ENABLED=true` exposes Swagger UI.
+- The same unauthenticated security configuration is used everywhere; the API
+  is only safe because it stays internal.
 - Credentials are provided through a local `.env` file and default values are
   not secret.
 - MySQL is not exposed to the host by the root Compose file, but the API and UI
   ports are.
 
-Before any production use: use a non-`dev` profile and a dedicated database
-user, disable seeding, put credentials in a secret manager (Docker secrets,
-Vault, or the orchestrator's secret store), enable API authentication, terminate
-TLS at a reverse proxy, and review the security configuration. Never commit a
-real `.env` file.
+The backend image has no baked-in profile. For the cluster, set
+`APP_SEED_ENABLED=false`, decide whether you want Swagger
+(`SPRINGDOC_ENABLED`), and point the OTLP endpoints at the in-cluster collector.
+Use Flyway migrations with Hibernate `validate`. The API has no end-user
+authentication, so it must stay internal behind nginx; only the frontend should
+be public. If Swagger stays enabled, reach it with `kubectl port-forward`. Use a
+dedicated database user, put credentials in a secret store, and terminate TLS at
+the ingress/load balancer. Never commit a real `.env` file.
 
 ## Documentation
 
