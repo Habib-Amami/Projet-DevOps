@@ -59,7 +59,6 @@ COPY --from=builder --chown=app:app /build/extracted/application/ ./
 
 # Modeled, container-aware JVM defaults; override at runtime with -e JAVA_OPTS=...
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" \
-    SPRING_PROFILES_ACTIVE=dev \
     SERVER_PORT=8089
 
 USER app

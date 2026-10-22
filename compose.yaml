@@ -1,11 +1,12 @@
 # =============================================================================
-# Achat - full stack (MySQL + Spring Boot API + Angular UI)
+# Achat - full stack (MySQL + Spring Boot API + Angular UI + observability)
 #
 #   docker compose up -d --build          # http://localhost:4200
-#   docker compose --profile observability up -d   # + Grafana LGTM on :3000
+#   OTEL_METRICS_ENABLED=false OTEL_TRACING_ENABLED=false \
+#     docker compose up -d mysql backend frontend  # skip observability
 #
 # Configuration is read from an optional .env file in this folder
-# (see .env.example). The values below are development defaults.
+# (see .env.example). Local defaults enable seeding, Swagger and OTLP.
 # =============================================================================
 
 name: achat
@@ -40,13 +41,17 @@ services:
     image: achat-backend:local
     restart: unless-stopped
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SERVER_PORT: "8089"
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-achatdb}?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
       DB_USERNAME: ${DB_USERNAME:-achat_user}
       DB_PASSWORD: ${DB_PASSWORD:-change-me}
-      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
       APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-true}
+      OTEL_METRICS_ENABLED: ${OTEL_METRICS_ENABLED:-true}
+      OTEL_TRACING_ENABLED: ${OTEL_TRACING_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-http://grafana-lgtm:4318/v1/metrics}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://grafana-lgtm:4318/v1/traces}
     depends_on:
       mysql:
         condition: service_healthy

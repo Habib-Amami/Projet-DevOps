@@ -24,10 +24,9 @@ import org.example.achat.facture.repositories.DetailFactureRepository;
 import org.example.achat.facture.repositories.FactureRepository;
 import org.example.achat.reglements.entities.Reglement;
 import org.example.achat.reglements.repositories.ReglementRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +38,7 @@ import java.util.List;
 import java.util.Set;
 
 @Component
-@Profile("dev")
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 public class DevelopmentDataSeeder implements ApplicationRunner {
 
 	private final ObjectMapper objectMapper;
@@ -53,7 +52,6 @@ public class DevelopmentDataSeeder implements ApplicationRunner {
 	private final FactureRepository factureRepository;
 	private final DetailFactureRepository detailFactureRepository;
 	private final ReglementRepository reglementRepository;
-	private final boolean seedEnabled;
 
 	public DevelopmentDataSeeder(
 			StockRepository stockRepository,
@@ -65,10 +63,9 @@ public class DevelopmentDataSeeder implements ApplicationRunner {
 			OperateurRepository operateurRepository,
 			FactureRepository factureRepository,
 			DetailFactureRepository detailFactureRepository,
-			ReglementRepository reglementRepository,
-			@Value("${app.seed.enabled:false}") boolean seedEnabled) {
-			this.objectMapper = JsonMapper.builder().build();
-			this.stockRepository = stockRepository;
+			ReglementRepository reglementRepository) {
+		this.objectMapper = JsonMapper.builder().build();
+		this.stockRepository = stockRepository;
 		this.categorieProduitRepository = categorieProduitRepository;
 		this.produitRepository = produitRepository;
 		this.secteurActiviteRepository = secteurActiviteRepository;
@@ -78,15 +75,11 @@ public class DevelopmentDataSeeder implements ApplicationRunner {
 		this.factureRepository = factureRepository;
 		this.detailFactureRepository = detailFactureRepository;
 		this.reglementRepository = reglementRepository;
-		this.seedEnabled = seedEnabled;
 	}
 
 	@Override
 	@Transactional
 	public void run(ApplicationArguments args) throws IOException {
-		if (!seedEnabled) {
-			return;
-		}
 		seedStocks();
 		seedCategories();
 		seedProducts();
