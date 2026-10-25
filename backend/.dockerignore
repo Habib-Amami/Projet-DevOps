@@ -1,0 +1,26 @@
+# Build output - rebuilt inside the image
+target/
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Local secrets and env files (never bake these into an image)
+.env
+.env.*
+!.env.example
+
+# Not needed to build the image
+README.md
+HELP.md
+postman/
+mvnw.cmd
+compose.yaml
