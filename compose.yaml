@@ -5,8 +5,8 @@
 #   OTEL_METRICS_ENABLED=false OTEL_TRACING_ENABLED=false \
 #     docker compose up -d mysql backend frontend  # skip observability
 #
-# Configuration is read from an optional .env file in this folder
-# (see .env.example). Local defaults enable seeding, Swagger and OTLP.
+# The root .env is the single source for local backend, frontend and Compose
+# values (see .env.example). Container-only addresses are overridden below.
 # =============================================================================
 
 name: achat
@@ -50,8 +50,10 @@ services:
       SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-true}
       OTEL_METRICS_ENABLED: ${OTEL_METRICS_ENABLED:-true}
       OTEL_TRACING_ENABLED: ${OTEL_TRACING_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-http://grafana-lgtm:4318/v1/metrics}
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://grafana-lgtm:4318/v1/traces}
+      # Root .env points Maven at localhost; containers must use the LGTM
+      # service name instead.
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://grafana-lgtm:4318/v1/metrics
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://grafana-lgtm:4318/v1/traces
     depends_on:
       mysql:
         condition: service_healthy
@@ -65,7 +67,10 @@ services:
     restart: unless-stopped
     environment:
       # nginx proxies /api/* to this origin (same-origin for the browser).
+      # The root .env value (localhost:8089) is for ng serve; inside Compose
+      # the frontend must reach the backend by service name.
       BACKEND_URL: http://backend:8089
+      DNS_RESOLVER: ${DNS_RESOLVER:-127.0.0.11}
     depends_on:
       backend:
         condition: service_healthy

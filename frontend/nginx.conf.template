@@ -28,7 +28,7 @@ server {
         access_log off;
     }
 
-    # Same contract as the dev proxy (proxy.conf.json):
+    # Same contract as the dev proxy (proxy.conf.js):
     # /api/facture/... -> ${BACKEND_URL}/facture/...
     location /api/ {
         rewrite ^/api/(.*)$ /$1 break;
