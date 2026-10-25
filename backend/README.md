@@ -73,49 +73,34 @@ docker compose up -d --build
 
 This starts MySQL, the backend on <http://localhost:8089>, the frontend on
 <http://localhost:4200>, and the local observability stack (Grafana LGTM +
-Alloy). Grafana is at <http://localhost:3000> (`admin` / `admin`). Configuration,
-service details and the two Compose files are explained in the
+Alloy). Grafana is at <http://localhost:3000> (`admin` / `admin`). Configuration
+and service details are explained in the
 [root README](../README.md), especially
 [How Compose fits](../README.md#how-compose-fits-in-this-project).
 
 ### Backend only, from Maven
 
+Create the root environment file once:
+
+```bash
+cp .env.example .env    # configure DB_URL, DB_USERNAME, DB_PASSWORD
+```
+
+Then run from `backend/`:
+
 ```bash
 cd backend
-cp .env.example .env    # configure DB_URL, DB_USERNAME, DB_PASSWORD
 ./mvnw spring-boot:run
 ```
 
-Then continue with [Local development](#local-development) for the database and
-frontend setup.
+Spring imports `../.env`, so there is no backend-specific env file.
 
 ## Local development
 
-The backend runs from Maven against a MySQL instance reachable from the host.
-Choose one of the two database options below.
+The Maven path needs a MySQL instance reachable on `localhost:3306`. Use an
+existing local server, or use the full Compose stack instead.
 
-### Option A - helper Compose file (MySQL in Docker)
-
-```bash
-cd backend
-docker compose up -d mysql
-cp .env.example .env
-```
-
-The helper creates the `mydatabase` database and uses the credentials from
-`backend/.env` (the same file Spring Boot reads):
-
-- `DB_USERNAME=root` and `DB_PASSWORD=change-me` by default;
-- `DB_URL=jdbc:mysql://localhost:3306/mydatabase?serverTimezone=UTC`.
-
-These defaults are for disposable local development only. The helper also
-defines an optional Grafana LGTM container
-(`docker compose --profile observability up -d`). It is intended for running the
-applications from Maven/Angular, not as the full stack. It does not run Alloy,
-so it collects metrics and traces but not logs; use the root `compose.yaml` for
-the complete local observability setup.
-
-### Option B - existing local MySQL server
+### Option A - existing local MySQL server
 
 Create the database and an application user:
 
@@ -125,11 +110,7 @@ CREATE USER 'achat_user'@'localhost' IDENTIFIED BY 'a-strong-password';
 GRANT ALL PRIVILEGES ON achatdb.* TO 'achat_user'@'localhost';
 ```
 
-Then create the backend environment file and adjust it:
-
-```bash
-cp .env.example .env
-```
+Then adjust the root `.env`:
 
 ```dotenv
 SERVER_PORT=8089
@@ -145,7 +126,20 @@ SPRINGDOC_ENABLED=true
 never in the root Compose file (the MySQL image reserves root for
 `MYSQL_ROOT_PASSWORD`).
 
+### Option B - full Compose stack
+
+If you do not have a local MySQL server, use the root Compose stack:
+
+```bash
+docker compose up -d --build
+```
+
+The backend then runs in its container. The root Compose file does not publish
+MySQL to the host, so Maven cannot use the containerized database.
+
 ### Start the API and frontend
+
+With a host MySQL configured in root `.env`:
 
 ```bash
 ./mvnw spring-boot:run
@@ -159,23 +153,27 @@ npm install
 npm start
 ```
 
-Open <http://localhost:4200>; the dev server proxies `/api` to port 8089.
+Open <http://localhost:4200>; the dev proxy reads `BACKEND_URL` from the root
+`.env` and proxies `/api` to port 8089.
 
-> **Setup note:** Spring Boot imports the file through
-> `spring.config.import=optional:file:.env[.properties]`. Keep `.env` in the
-> `backend/` folder (the directory you start Maven from) and never commit it.
-> The root `.env` used by Compose is a separate file with different variables.
+> **Setup note:** Spring Boot imports the root file through
+> `spring.config.import=optional:file:../.env[.properties]`. Run Maven from
+> `backend/` and never commit `.env`.
 
-If you prefer environment variables over the `.env` import:
+If you prefer exported environment variables:
 
 ```bash
 set -a
-source .env
+source ../.env
 set +a
 ./mvnw spring-boot:run
 ```
 
 ## Configuration
+
+The local values live in the repository-root `.env`, which is shared with
+Compose and the Angular dev proxy. The defaults below are fallbacks used when a
+variable is not set.
 
 | Variable | Default | Purpose |
 | -------- | ------- | ------- |
@@ -357,9 +355,9 @@ Each domain follows the same layers: `controllers` → `services` →
   `FactureRepository`); keep this in mind when adding read methods.
 - **Port 8089 already in use:** another instance is running; stop it or change
   `SERVER_PORT`.
-- **`Access denied for user`:** the credentials in `.env` (or the Compose
-  `.env`) do not match the account in MySQL. Remember that credentials are only
-  created on first database initialization.
+- **`Access denied for user`:** the credentials in the root `.env` do not match
+  the account in MySQL. Remember that credentials are only created on first
+  database initialization.
 - **Compose reports `MYSQL_USER="root"`:** set `DB_USERNAME=achat_user` in the
   root `.env`; the MySQL image cannot create root as a regular user.
 - **Tests fail to start Testcontainers:** make sure the Docker daemon is

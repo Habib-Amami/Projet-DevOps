@@ -73,7 +73,8 @@ in the LGTM image but is intentionally not configured.
 
 The browser only talks to nginx. nginx serves the Angular bundle and forwards
 `/api/*` to `http://backend:8089/*`, so there is no CORS setup. This mirrors the
-Angular dev proxy (`frontend/proxy.conf.json`) used with `ng serve`.
+Angular dev proxy (`frontend/proxy.conf.js`, which reads `BACKEND_URL` from the
+root `.env`) used with `ng serve`.
 
 ## Tech stack
 
@@ -90,20 +91,19 @@ Angular dev proxy (`frontend/proxy.conf.json`) used with `ng serve`.
 ```
 .
 ├── compose.yaml              # full stack: MySQL + backend + frontend + LGTM + Alloy
-├── .env.example              # template for the root Compose configuration
+├── .env.example              # single local template: backend, frontend, Compose
 ├── Jenkinsfile               # CI: backend verify + frontend test/build
 ├── observability/
 │   └── alloy/config.alloy    # local Docker log collection for Loki
 ├── backend/
 │   ├── Dockerfile            # multi-stage Spring Boot image
-│   ├── compose.yaml          # standalone helper: MySQL + Grafana for local Maven runs
-│   ├── .env.example          # template for running the backend from Maven
 │   ├── README.md             # backend guide
 │   ├── pom.xml
 │   └── src/
 └── frontend/
     ├── Dockerfile            # Node build + unprivileged nginx runtime
     ├── nginx.conf.template   # SPA routing and /api reverse proxy
+    ├── proxy.conf.js         # dev proxy reads BACKEND_URL from root .env
     ├── .dockerignore
     ├── README.md             # frontend guide
     ├── package.json
@@ -169,23 +169,20 @@ backend will log connection errors while trying to reach the collector.
 
 ## How Compose fits in this project
 
-There are two Compose files, with different purposes:
+`compose.yaml` is the only Compose file and the canonical way to run the
+project. It builds the backend and frontend images, creates MySQL and wires all
+services together on one network.
 
-- **`compose.yaml` (repository root) is the canonical way to run the project.**
-  It builds the backend and frontend images, creates MySQL and wires all three
-  services together on one network. Use it unless you are actively debugging an
-  application with its native tooling.
+The root `.env` is the single local source for values used by Compose, Maven and
+the Angular dev proxy. Compose overrides only the addresses that must change
+inside the Docker network:
 
-- **`backend/compose.yaml` is only a development helper.** It starts MySQL
-  (published on host port `3306`) and an optional Grafana LGTM stack while the
-  backend runs from Maven (`./mvnw spring-boot:run`) and the frontend runs from
-  the Angular CLI (`npm start`). It does not build the applications, does not
-  ship container logs, and is not the full stack. Use the root Compose file when
-  you want the complete observability setup.
+- backend: `DB_URL` → `mysql:3306`, OTLP endpoints → `grafana-lgtm:4318`
+- frontend: `BACKEND_URL` → `http://backend:8089`
 
-The root Compose file does **not** publish MySQL to the host. If you run the
-backend from Maven, use a locally installed MySQL or the `backend/compose.yaml`
-helper instead.
+The root Compose file does **not** publish MySQL to the host. When running the
+backend from Maven, use a locally installed MySQL on `localhost:3306`, or use
+the full Compose stack instead.
 
 ### Services
 
@@ -203,30 +200,33 @@ always listens on `8080`.
 
 ## Configuration
 
-Compose reads the optional `.env` file in the repository root. Start from
+The root `.env` is used by Compose, Maven and the Angular dev proxy. Start from
 [`.env.example`](.env.example):
 
 | Variable | Default | Used by | Purpose |
 | -------- | ------- | ------- | ------- |
 | `MYSQL_DATABASE` | `achatdb` | MySQL, backend | Database created at first start |
-| `MYSQL_ROOT_PASSWORD` | `root-change-me` | MySQL | Admin (`root`) password |
+| `MYSQL_ROOT_PASSWORD` | `replace-with-a-random-root-password` | MySQL | Admin (`root`) password |
 | `DB_USERNAME` | `achat_user` | MySQL, backend | Application account; must not be `root` |
-| `DB_PASSWORD` | `change-me` | MySQL, backend | Application password (use a different value from root) |
+| `DB_PASSWORD` | `replace-with-a-random-app-password` | MySQL, backend | Application password (use a different value from root) |
+| `DB_URL` | `jdbc:mysql://localhost:3306/achatdb...` | Maven | JDBC URL for host-side runs; Compose overrides it to `mysql:3306` |
+| `SERVER_PORT` | `8089` | Maven | API port for host-side runs |
 | `JPA_DDL_AUTO` | `validate` | backend | Hibernate validates the Flyway-managed schema |
 | `APP_SEED_ENABLED` | `true` | backend | Insert development data on startup |
 | `SPRINGDOC_ENABLED` | `true` | backend | Enable Swagger/OpenAPI; set `false` in the cluster if not needed |
 | `OTEL_METRICS_ENABLED` | `true` | backend | Export metrics over OTLP |
 | `OTEL_TRACING_ENABLED` | `true` | backend | Export traces over OTLP |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `http://localhost:4318/v1/metrics` | Maven | Host-side metrics endpoint; Compose overrides it |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `http://localhost:4318/v1/traces` | Maven | Host-side traces endpoint; Compose overrides it |
+| `BACKEND_URL` | `http://localhost:8089` | Angular dev proxy | Host-side proxy target; Compose overrides it to `http://backend:8089` |
+| `DNS_RESOLVER` | `127.0.0.11` | frontend container | Docker DNS; set the cluster DNS in Kubernetes |
 | `FRONTEND_PORT` | `4200` | Compose | Host port for the web UI |
 | `BACKEND_PORT` | `8089` | Compose | Host port for the API |
 | `GRAFANA_PORT` | `3000` | Compose | Host port for Grafana |
 
-The OTLP endpoints default to the Compose service name
-`http://grafana-lgtm:4318/v1/{metrics,traces}`. Override
-`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` and
-`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` only when the collector has a different
-address. There is no Spring profile to switch: the same image runs locally and in
-the cluster, and only these environment values differ.
+There is no Spring profile to switch: the same image runs locally and in the
+cluster, and only these environment values differ. Production values use the
+same names through Kubernetes `ConfigMap`/`Secret`.
 
 > **Database credentials are applied only once**, when the volume is first
 > initialized. Editing `.env` later does not change existing MySQL accounts.
@@ -234,8 +234,8 @@ the cluster, and only these environment values differ.
 > `docker compose down -v` (this destroys all data).
 
 For running the backend outside Compose, see
-[`backend/README.md`](backend/README.md); it uses the separate
-[`backend/.env`](backend/.env.example) file.
+[`backend/README.md`](backend/README.md). Maven loads the same root `.env`
+through `spring.config.import=optional:file:../.env[.properties]`.
 
 ## Observability
 
@@ -265,24 +265,25 @@ of scope.
 
 **Requirements:** Java 21, MySQL 8+, Node.js 22.12+ (or 24+) and npm.
 
-1. Start MySQL - either a locally installed server or the MySQL-only helper
-   Compose file (it publishes port `3306` and uses the defaults from
-   `backend/.env`):
+1. Create the root environment file once:
 
    ```bash
-   cd backend
-   docker compose up -d mysql
+   cp .env.example .env
    ```
 
-2. Configure and start the API:
+   Adjust `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` if you use an existing local
+   MySQL. The same file is used by Maven and the Angular dev proxy.
+
+2. Start the API from `backend/`:
 
    ```bash
    cd backend
-   cp .env.example .env    # set DB_URL, DB_USERNAME, DB_PASSWORD
    ./mvnw spring-boot:run
    ```
 
-3. Configure and start the UI in a second terminal:
+   Spring imports `../.env`, so no second backend env file is needed.
+
+3. Start the UI in a second terminal:
 
    ```bash
    cd frontend
@@ -290,8 +291,9 @@ of scope.
    npm start
    ```
 
-4. Open <http://localhost:4200>. Angular proxies `/api` to
-   `http://localhost:8089` using `frontend/proxy.conf.json`.
+4. Open <http://localhost:4200>. Angular reads `BACKEND_URL` from the root
+   `.env` through `frontend/proxy.conf.js` and proxies `/api` to
+   `http://localhost:8089`.
 
 Full details: [`backend/README.md`](backend/README.md) and
 [`frontend/README.md`](frontend/README.md).
@@ -358,7 +360,7 @@ conflict with the running stack.
   `ng serve`.
 - **"Cannot reach the server. Is the backend running?"** - check
   `docker compose ps` and `curl http://localhost:8089/actuator/health`; in local
-  development check `frontend/proxy.conf.json`.
+  development check `BACKEND_URL` in `.env` and `frontend/proxy.conf.js`.
 - **Frontend container starts but API calls fail** - check the nginx target:
   `docker compose exec frontend wget -qO- http://backend:8089/actuator/health`.
 - **Database changes disappear after `down -v`** - that command deletes the
