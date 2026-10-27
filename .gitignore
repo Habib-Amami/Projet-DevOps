@@ -4,3 +4,7 @@
 # IDE
 .idea/
 .vscode/
+
+# Local CI overrides and secrets
+ci/.env
+ci/compose.override.yaml

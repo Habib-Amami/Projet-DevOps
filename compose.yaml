@@ -1,11 +1,12 @@
 # =============================================================================
-# Achat - full stack (MySQL + Spring Boot API + Angular UI)
+# Achat - full stack (MySQL + Spring Boot API + Angular UI + observability)
 #
 #   docker compose up -d --build          # http://localhost:4200
-#   docker compose --profile observability up -d   # + Grafana LGTM on :3000
+#   OTEL_METRICS_ENABLED=false OTEL_TRACING_ENABLED=false \
+#     docker compose up -d mysql backend frontend  # skip observability
 #
-# Configuration is read from an optional .env file in this folder
-# (see .env.example). The values below are development defaults.
+# The root .env is the single source for local backend, frontend and Compose
+# values (see .env.example). Container-only addresses are overridden below.
 # =============================================================================
 
 name: achat
@@ -40,13 +41,19 @@ services:
     image: achat-backend:local
     restart: unless-stopped
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SERVER_PORT: "8089"
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-achatdb}?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
       DB_USERNAME: ${DB_USERNAME:-achat_user}
       DB_PASSWORD: ${DB_PASSWORD:-change-me}
-      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
       APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-true}
+      OTEL_METRICS_ENABLED: ${OTEL_METRICS_ENABLED:-true}
+      OTEL_TRACING_ENABLED: ${OTEL_TRACING_ENABLED:-true}
+      # Root .env points Maven at localhost; containers must use the LGTM
+      # service name instead.
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://grafana-lgtm:4318/v1/metrics
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://grafana-lgtm:4318/v1/traces
     depends_on:
       mysql:
         condition: service_healthy
@@ -60,7 +67,10 @@ services:
     restart: unless-stopped
     environment:
       # nginx proxies /api/* to this origin (same-origin for the browser).
+      # The root .env value (localhost:8089) is for ng serve; inside Compose
+      # the frontend must reach the backend by service name.
       BACKEND_URL: http://backend:8089
+      DNS_RESOLVER: ${DNS_RESOLVER:-127.0.0.11}
     depends_on:
       backend:
         condition: service_healthy
@@ -68,9 +78,8 @@ services:
       # Host 4200 to avoid Jenkins (usually :8080); container listens on 8080.
       - "${FRONTEND_PORT:-4200}:8080"
 
-  # Optional observability stack: docker compose --profile observability up -d
+  # Local LGTM stack: Grafana, Loki, Tempo, Prometheus and the OTel collector.
   grafana-lgtm:
-    profiles: ["observability"]
     image: grafana/otel-lgtm:latest
     restart: unless-stopped
     ports:
@@ -78,5 +87,24 @@ services:
       - "4317:4317"
       - "4318:4318"
 
+  # Reads Docker container logs and pushes them to Loki, like the cluster
+  # Alloy DaemonSet does with pod logs. The socket mount is local-only.
+  alloy:
+    image: grafana/alloy:latest
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      grafana-lgtm:
+        condition: service_healthy
+
 volumes:
   mysql-data:
+  alloy-data:
