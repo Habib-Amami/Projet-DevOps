@@ -1,0 +1,18 @@
+# Same variable names as compose.yaml / .env.example. Passwords live in the
+# achat-db Secret (see examples/secret.yaml), never here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: achat-config
+  namespace: achat
+data:
+  MYSQL_DATABASE: achatdb
+  SERVER_PORT: "8089"
+  DB_URL: jdbc:mysql://mysql:3306/achatdb?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
+  JPA_DDL_AUTO: validate
+  # MySQL uses emptyDir in the lab, so the demo data is re-seeded on restart.
+  APP_SEED_ENABLED: "true"
+  SPRINGDOC_ENABLED: "true"
+  # No LGTM collector on the cluster.
+  OTEL_METRICS_ENABLED: "false"
+  OTEL_TRACING_ENABLED: "false"

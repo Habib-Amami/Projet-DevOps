@@ -39,7 +39,8 @@ Jenkins includes:
 - JDK 21
 - Node.js 24
 - Git, Bash, curl, jq, unzip, and OpenSSH
-- Docker CLI
+- Docker CLI with the buildx plugin
+- AWS CLI v2 and kubectl (for the EKS deployment)
 - The pipeline plugins used by the root `Jenkinsfile`
 
 ## Requirements
@@ -262,6 +263,11 @@ The merged `Jenkinsfile` defines these parameters:
 - `PUBLISH_NEXUS`
 - `SONAR_HOST_URL`
 - `NEXUS_HOST`
+- `DOCKER_PUSH`
+- `DOCKERHUB_USER`
+- `DEPLOY_K8S`
+- `EKS_CLUSTER`
+- `AWS_REGION`
 
 ## Run the CI
 
@@ -282,6 +288,51 @@ the documented CI flow keeps both stages enabled.
 To test a feature branch, first push that branch, then replace `BRANCH` with its
 name. Jenkins checks out the selected branch from GitHub, not from your local
 working tree. A local branch that has not been pushed is not visible to Jenkins.
+
+## Continuous delivery: Docker Hub and EKS
+
+After Nexus, the pipeline builds the backend and frontend images, pushes them to
+Docker Hub, and can deploy them to the EKS cluster created by
+[`../terraform`](../terraform/README.md).
+
+| Stage | Runs when | What it does |
+| --- | --- | --- |
+| `DOCKER BUILD` | `DOCKER_PUSH=true` | Builds `<DOCKERHUB_USER>/achat-backend` and `achat-frontend`, tagged with the build number and `latest` |
+| `DOCKER PUSH` | `DOCKER_PUSH=true` | Pushes both tags to Docker Hub |
+| `DEPLOY TO EKS` | `DOCKER_PUSH=true` and `DEPLOY_K8S=true` | Creates the `achat-db` Secret, applies [`../k8s`](../k8s) with this build's images, waits for the rollouts and prints the public URL |
+
+`DEPLOY_K8S` is `false` by default because the cluster only exists while you
+run the lab; turn it on once `terraform apply` has finished.
+
+Rebuild Jenkins once so it has the AWS CLI and kubectl:
+
+```bash
+docker compose up -d --build jenkins
+```
+
+Create these Jenkins credentials (**Manage Jenkins** -> **Credentials** ->
+**System** -> **Global credentials**):
+
+| ID | Kind | Value |
+| --- | --- | --- |
+| `dockerhub-credentials` | Username with password | Docker Hub username and an **access token** (Docker Hub -> Account settings -> Personal access tokens, Read & Write) |
+| `aws-learner-lab` | Secret file | A text file containing the Learner Lab **AWS Details -> AWS CLI** block (`[default]` + 3 lines). **Re-upload it at every new lab session**; the old token expires |
+| `achat-db-credentials` | Username with password | `achat_user` and a random password (`openssl rand -hex 24`) |
+| `achat-mysql-root` | Secret text | A different random password for MySQL root |
+
+Run the job with:
+
+```text
+DOCKER_PUSH=true
+DOCKERHUB_USER=<your Docker Hub username>
+DEPLOY_K8S=true
+EKS_CLUSTER=achat-eks
+AWS_REGION=us-east-1
+```
+
+The last lines of the `DEPLOY TO EKS` log show the application URL. If
+`aws eks update-kubeconfig` fails with `ExpiredToken`, the lab session has
+changed: upload a fresh `aws-learner-lab` secret file.
 
 ## Common first-run failures
 

@@ -20,6 +20,7 @@ builds and tests every change.
 - [Local development with native tooling](#local-development-with-native-tooling)
 - [API at a glance](#api-at-a-glance)
 - [Testing and CI](#testing-and-ci)
+- [Deploy to AWS EKS](#deploy-to-aws-eks)
 - [Troubleshooting](#troubleshooting)
 - [Security and production notes](#security-and-production-notes)
 
@@ -92,7 +93,10 @@ root `.env`) used with `ng serve`.
 .
 ├── compose.yaml              # full stack: MySQL + backend + frontend + LGTM + Alloy
 ├── .env.example              # single local template: backend, frontend, Compose
-├── Jenkinsfile               # CI: backend verify + frontend test/build
+├── Jenkinsfile               # CI/CD: build, test, Sonar, Nexus, Docker Hub, EKS
+├── ci/                       # local Jenkins + SonarQube + Nexus stack
+├── terraform/                # EKS cluster on the AWS Academy Learner Lab
+├── k8s/                      # Kubernetes manifests (MySQL, backend, frontend)
 ├── observability/
 │   └── alloy/config.alloy    # local Docker log collection for Loki
 ├── backend/
@@ -347,6 +351,21 @@ docker run --rm achat-frontend:test npm test -- --watch=false --no-progress
 The UI is published on **4200**, so a Jenkins instance on **8080** does not
 conflict with the running stack.
 
+## Deploy to AWS EKS
+
+Continuous delivery targets an EKS cluster in the AWS Academy Learner Lab:
+
+1. [`terraform/`](terraform/README.md) creates the cluster (`terraform apply`).
+2. Jenkins builds the images, pushes them to Docker Hub and applies
+   [`k8s/`](k8s) (`DOCKER_PUSH=true`, `DEPLOY_K8S=true`).
+3. The frontend Service is a public load balancer; MySQL and the API stay
+   internal to the cluster.
+
+Setup, credentials and cost notes: [`terraform/README.md`](terraform/README.md)
+and [`ci/README.md`](ci/README.md#continuous-delivery-docker-hub-and-eks).
+Always run `kubectl delete namespace achat` and `terraform destroy` after a demo
+to protect the lab budget.
+
 ## Troubleshooting
 
 - **`achat-mysql-1 is unhealthy` with `MYSQL_USER="root"` in the logs** -
@@ -396,3 +415,4 @@ the ingress/load balancer. Never commit a real `.env` file.
 - [Docker Compose file](compose.yaml)
 - [Environment template](.env.example)
 - [Jenkins pipeline](Jenkinsfile)
+- [Terraform / EKS guide](terraform/README.md)

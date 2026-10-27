@@ -9,11 +9,22 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'develop', description: 'Branche à construire')
+        string(name: 'BRANCH', defaultValue: 'Asma/terraform', description: 'Branche à construire')
         booleanParam(name: 'RUN_SONAR', defaultValue: true, description: 'Analyse SonarQube')
         booleanParam(name: 'PUBLISH_NEXUS', defaultValue: true, description: 'Publier le JAR sur Nexus')
         string(name: 'SONAR_HOST_URL', defaultValue: 'http://host.docker.internal:9000', description: 'URL SonarQube')
         string(name: 'NEXUS_HOST', defaultValue: 'host.docker.internal:8081', description: 'Hôte Nexus, sans http://')
+        booleanParam(name: 'DOCKER_PUSH', defaultValue: true, description: 'Construire et pousser les images sur Docker Hub')
+        string(name: 'DOCKERHUB_USER', defaultValue: '', description: 'Utilisateur Docker Hub (préfixe des images)')
+        booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
+        string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
+        string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
+    }
+
+    environment {
+        BACKEND_IMAGE = "${params.DOCKERHUB_USER}/achat-backend"
+        FRONTEND_IMAGE = "${params.DOCKERHUB_USER}/achat-frontend"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -86,6 +97,74 @@ pipeline {
                         [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
                     ]
                 )
+            }
+        }
+        stage('DOCKER BUILD') {
+            when { expression { params.DOCKER_PUSH } }
+            steps {
+                script {
+                    if (!params.DOCKERHUB_USER?.trim()) {
+                        error 'DOCKERHUB_USER est obligatoire pour construire les images'
+                    }
+                }
+                sh '''
+                    docker build -t "$BACKEND_IMAGE:$IMAGE_TAG" -t "$BACKEND_IMAGE:latest" backend
+                    docker build -t "$FRONTEND_IMAGE:$IMAGE_TAG" -t "$FRONTEND_IMAGE:latest" frontend
+                '''
+            }
+        }
+        stage('DOCKER PUSH') {
+            when { expression { params.DOCKER_PUSH } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_LOGIN', passwordVariable: 'DOCKERHUB_TOKEN')]) {
+                    sh '''
+                        echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_LOGIN" --password-stdin
+                        docker push "$BACKEND_IMAGE:$IMAGE_TAG"
+                        docker push "$BACKEND_IMAGE:latest"
+                        docker push "$FRONTEND_IMAGE:$IMAGE_TAG"
+                        docker push "$FRONTEND_IMAGE:latest"
+                    '''
+                }
+            }
+            post {
+                always {
+                    sh 'docker logout || true'
+                }
+            }
+        }
+        stage('DEPLOY TO EKS') {
+            when { expression { params.DOCKER_PUSH && params.DEPLOY_K8S } }
+            steps {
+                withCredentials([
+                    file(credentialsId: 'aws-learner-lab', variable: 'AWS_SHARED_CREDENTIALS_FILE'),
+                    usernamePassword(credentialsId: 'achat-db-credentials', usernameVariable: 'DB_USERNAME', passwordVariable: 'DB_PASSWORD'),
+                    string(credentialsId: 'achat-mysql-root', variable: 'MYSQL_ROOT_PASSWORD')
+                ]) {
+                    sh '''
+                        export KUBECONFIG="$WORKSPACE/.kube/config"
+                        aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
+
+                        kubectl apply -f k8s/namespace.yaml
+                        kubectl -n achat create secret generic achat-db \
+                          --from-literal=MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
+                          --from-literal=DB_USERNAME="$DB_USERNAME" \
+                          --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+                          --dry-run=client -o yaml | kubectl apply -f -
+
+                        # Point the manifests at the images pushed by this build.
+                        for f in k8s/*.yaml; do
+                          sed -e "s#DOCKERHUB_USER/achat-backend:latest#$BACKEND_IMAGE:$IMAGE_TAG#" \
+                              -e "s#DOCKERHUB_USER/achat-frontend:latest#$FRONTEND_IMAGE:$IMAGE_TAG#" "$f"
+                          echo '---'
+                        done | kubectl apply -f -
+
+                        kubectl -n achat rollout status deployment/mysql --timeout=5m
+                        kubectl -n achat rollout status deployment/backend --timeout=10m
+                        kubectl -n achat rollout status deployment/frontend --timeout=5m
+                        kubectl -n achat get pods,svc
+                        echo "Application: http://$(kubectl -n achat get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+                    '''
+                }
             }
         }
     }
