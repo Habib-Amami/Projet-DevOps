@@ -5,8 +5,10 @@ tracks products, stocks, suppliers, business sectors, operators, invoices and
 payments, with an Angular web UI backed by a Spring Boot REST API and MySQL.
 
 The project is developed as a DevOps exercise: both applications are
-containerized, the whole stack runs with Docker Compose, and a Jenkins pipeline
-builds and tests every change.
+containerized, the whole stack runs with Docker Compose, a Jenkins pipeline
+builds, tests, analyses (SonarQube) and publishes (Nexus, Docker Hub) every
+change, and Terraform creates the Kubernetes cluster on AWS where Jenkins
+deploys the application.
 
 ## Contents
 
@@ -339,9 +341,10 @@ npm test -- --watch=false --no-progress
 npm run build
 ```
 
-The [`Jenkinsfile`](Jenkinsfile) runs these two stages and publishes the backend
-Surefire reports as JUnit results. The frontend image can also run its tests
-without a local Node installation:
+The [`Jenkinsfile`](Jenkinsfile) builds and tests the backend, publishes the
+Surefire reports as JUnit results, then runs SonarQube, Nexus, Docker Hub and
+the optional EKS deployment. Setup and usage: [`ci/README.md`](ci/README.md).
+The frontend image can also run its tests without a local Node installation:
 
 ```bash
 docker build --target builder -t achat-frontend:test frontend
@@ -353,18 +356,48 @@ conflict with the running stack.
 
 ## Deploy to AWS EKS
 
-Continuous delivery targets an EKS cluster in the AWS Academy Learner Lab:
+Continuous delivery targets an EKS cluster in the AWS Academy Learner Lab.
+Two tools share the work:
 
-1. [`terraform/`](terraform/README.md) creates the cluster (`terraform apply`).
-2. Jenkins builds the images, pushes them to Docker Hub and applies
-   [`k8s/`](k8s) (`DOCKER_PUSH=true`, `DEPLOY_K8S=true`).
-3. The frontend Service is a public load balancer; MySQL and the API stay
-   internal to the cluster.
+| Tool | Job | When to run it |
+| --- | --- | --- |
+| **Terraform** ([`terraform/`](terraform/README.md)) | Creates the infrastructure: an EKS cluster with 2 nodes | Once per lab session (`terraform apply`), and `terraform destroy` at the end |
+| **Jenkins** ([`Jenkinsfile`](Jenkinsfile), [`ci/`](ci/README.md)) | Builds, tests and packages the app, pushes the images to Docker Hub, deploys [`k8s/`](k8s) to the cluster | At every code change |
 
-Setup, credentials and cost notes: [`terraform/README.md`](terraform/README.md)
-and [`ci/README.md`](ci/README.md#continuous-delivery-docker-hub-and-eks).
-Always run `kubectl delete namespace achat` and `terraform destroy` after a demo
-to protect the lab budget.
+```
+ git push ──► Jenkins: build ─► tests ─► Sonar ─► Nexus ─► Docker Hub ─► kubectl apply
+                                                                           │
+ terraform apply ──► EKS cluster (achat-eks) ◄─────────────────────────────┘
+                         └─ frontend (public load balancer) ─► backend ─► mysql
+```
+
+In order:
+
+1. **Run CI first** (no AWS needed): push your branch, run Jenkins with
+   `DOCKER_PUSH` checked and `DEPLOY_K8S` unchecked. All stages must be green
+   and the images must appear on Docker Hub.
+   → [`ci/README.md`](ci/README.md#run-the-ci-build-test-sonar-nexus-docker-hub)
+2. **Create the cluster**: Start Lab, copy the AWS credentials, `terraform apply`.
+   → [`terraform/README.md`](terraform/README.md)
+3. **Deploy**: add the AWS and database credentials to Jenkins, then run the
+   pipeline with `DEPLOY_K8S` checked. Open the URL printed at the end of the log.
+   → [`ci/README.md`](ci/README.md#continuous-delivery-docker-hub-and-eks)
+4. **Clean up after every demo**: `kubectl delete namespace achat`, then
+   `terraform destroy`. The cluster costs about $0.20/hour even when idle and
+   the lab budget is $50.
+
+Only the frontend is public; MySQL and the API stay internal to the cluster.
+
+### What to show at validation
+
+| Item | Where |
+| --- | --- |
+| Git history | GitHub repository, branch `Asma/terraform` |
+| Jenkins | Green pipeline run with every stage |
+| SonarQube | http://localhost:9000, project `achat` |
+| Nexus | http://localhost:8081, `maven-snapshots` → `org/example/achat` |
+| Docker Hub | `<user>/achat-backend` and `<user>/achat-frontend` with build-number tags |
+| Kubernetes | `kubectl -n achat get pods,svc` and the application URL |
 
 ## Troubleshooting
 

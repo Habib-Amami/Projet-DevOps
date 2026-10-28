@@ -50,7 +50,7 @@ payments, and exposes the API consumed by the [Angular frontend](../frontend).
 | API docs | springdoc OpenAPI 3.1.0 + Swagger UI |
 | Observability | Micrometer, Prometheus registry, Spring Boot OpenTelemetry |
 | Build | Maven Wrapper (`./mvnw`) |
-| Tests | JUnit 5, Mockito, Spring Boot Test, Testcontainers (MySQL, Grafana LGTM) |
+| Tests | JUnit 5, Mockito, Spring Boot Test, Testcontainers (MySQL 8.4) |
 | Runtime image | Multi-stage `eclipse-temurin:21-jdk-alpine` → `21-jre-alpine`, non-root |
 
 ## Requirements
@@ -294,8 +294,11 @@ Request bodies use the entity field names (for example a stock is
 ./mvnw -B clean verify
 ```
 
-Testcontainers starts MySQL and Grafana LGTM containers for the context test, so
-a running Docker daemon is required. Surefire XML reports are written to
+Testcontainers starts a MySQL 8.4 container for the context test, so a running
+Docker daemon is required. Grafana LGTM is not started by tests (they disable
+metrics and tracing export); it is only added when you run
+`TestAchatApplication` for local development. In Jenkins, Testcontainers reaches
+its containers through `host.docker.internal` (see `ci/compose.yaml`). Surefire XML reports are written to
 `target/surefire-reports/` and published by the Jenkins pipeline. The Docker
 image build skips tests (`-DskipTests`) because CI already runs them.
 
@@ -338,7 +341,8 @@ src/
       seed/                    JSON data used by the development seeder
   test/
     java/org/example/achat/
-      TestcontainersConfiguration.java   MySQL + LGTM test services
+      TestcontainersConfiguration.java   MySQL test service
+      LgtmTestcontainersConfiguration.java  LGTM for TestAchatApplication only
       ...                                service and controller tests
 ```
 
