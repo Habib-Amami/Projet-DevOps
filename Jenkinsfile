@@ -108,8 +108,14 @@ pipeline {
                     }
                 }
                 sh '''
-                    docker build -t "$BACKEND_IMAGE:$IMAGE_TAG" -t "$BACKEND_IMAGE:latest" backend
-                    docker build -t "$FRONTEND_IMAGE:$IMAGE_TAG" -t "$FRONTEND_IMAGE:latest" frontend
+                    docker buildx build --load \
+                      -t "$BACKEND_IMAGE:$IMAGE_TAG" \
+                      -t "$BACKEND_IMAGE:latest" \
+                      backend
+                    docker buildx build --load \
+                      -t "$FRONTEND_IMAGE:$IMAGE_TAG" \
+                      -t "$FRONTEND_IMAGE:latest" \
+                      frontend
                 '''
             }
         }
