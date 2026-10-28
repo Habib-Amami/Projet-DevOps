@@ -108,12 +108,11 @@ pipeline {
                     }
                 }
                 sh '''
-                    export DOCKER_BUILDKIT=1
-                    docker build \
+                    docker buildx build --load \
                       -t "$BACKEND_IMAGE:$IMAGE_TAG" \
                       -t "$BACKEND_IMAGE:latest" \
                       backend
-                    docker build \
+                    docker buildx build --load \
                       -t "$FRONTEND_IMAGE:$IMAGE_TAG" \
                       -t "$FRONTEND_IMAGE:latest" \
                       frontend

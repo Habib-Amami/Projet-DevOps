@@ -25,7 +25,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # Docker CLI only. Docker Desktop or Docker Engine provides the daemon.
 # The buildx plugin is required by the frontend Dockerfile (RUN --mount).
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=docker:cli /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec/docker/cli-plugins/
+COPY --from=docker/buildx-bin:v0.23.0 /buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+RUN docker buildx version
 
 # AWS CLI v2 and kubectl for the DEPLOY TO EKS stage.
 ARG KUBECTL_VERSION=v1.34.2
