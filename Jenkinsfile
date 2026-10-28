@@ -144,25 +144,44 @@ pipeline {
                         export KUBECONFIG="$WORKSPACE/.kube/config"
                         aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
 
-                        kubectl apply -f k8s/namespace.yaml
-                        kubectl -n achat create secret generic achat-db \
+                        # kubectl gives up after a 10 s TLS handshake; retry on slow networks.
+                        kc() {
+                          for attempt in 1 2 3 4 5; do
+                            kubectl "$@" && return 0
+                            echo "kubectl failed (attempt $attempt/5), retrying in 10s..."
+                            sleep 10
+                          done
+                          return 1
+                        }
+
+                        # Render everything to files first so a retry can re-read them.
+                        DEPLOY_DIR="$WORKSPACE/.deploy"
+                        rm -rf "$DEPLOY_DIR"
+                        mkdir -p "$DEPLOY_DIR"
+                        trap 'rm -rf "$DEPLOY_DIR"' EXIT
+
+                        (umask 077; kubectl -n achat create secret generic achat-db \
                           --from-literal=MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
                           --from-literal=DB_USERNAME="$DB_USERNAME" \
                           --from-literal=DB_PASSWORD="$DB_PASSWORD" \
-                          --dry-run=client -o yaml | kubectl apply -f -
+                          --dry-run=client -o yaml > "$DEPLOY_DIR/secret.yaml")
 
                         # Point the manifests at the images pushed by this build.
                         for f in k8s/*.yaml; do
                           sed -e "s#DOCKERHUB_USER/achat-backend:latest#$BACKEND_IMAGE:$IMAGE_TAG#" \
-                              -e "s#DOCKERHUB_USER/achat-frontend:latest#$FRONTEND_IMAGE:$IMAGE_TAG#" "$f"
-                          echo '---'
-                        done | kubectl apply -f -
+                              -e "s#DOCKERHUB_USER/achat-frontend:latest#$FRONTEND_IMAGE:$IMAGE_TAG#" \
+                              "$f" > "$DEPLOY_DIR/$(basename "$f")"
+                        done
 
-                        kubectl -n achat rollout status deployment/mysql --timeout=5m
-                        kubectl -n achat rollout status deployment/backend --timeout=10m
-                        kubectl -n achat rollout status deployment/frontend --timeout=5m
-                        kubectl -n achat get pods,svc
-                        echo "Application: http://$(kubectl -n achat get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+                        kc apply -f "$DEPLOY_DIR/namespace.yaml"
+                        kc apply -f "$DEPLOY_DIR/secret.yaml"
+                        kc apply -f "$DEPLOY_DIR"
+
+                        kc -n achat rollout status deployment/mysql --timeout=5m
+                        kc -n achat rollout status deployment/backend --timeout=10m
+                        kc -n achat rollout status deployment/frontend --timeout=5m
+                        kc -n achat get pods,svc
+                        echo "Application: http://$(kc -n achat get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
                     '''
                 }
             }
