@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: achat
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          # Jenkins replaces DOCKERHUB_USER and the tag before applying.
+          image: DOCKERHUB_USER/achat-frontend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: BACKEND_URL
+              value: http://backend.achat.svc.cluster.local:8089
+            # Cluster DNS, fixed by service_ipv4_cidr in terraform/main.tf.
+            - name: DNS_RESOLVER
+              value: 172.20.0.10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+# Public entry point: AWS creates a load balancer and gives it a DNS name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: achat
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 8080

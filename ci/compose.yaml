@@ -15,7 +15,17 @@ services:
       - "127.0.0.1:${JENKINS_AGENT_PORT:-50000}:50000"
     volumes:
       - jenkins_home:/var/jenkins_home
+      # Jenkins runs as root, so Maven caches under /root/.m2. Keep it on a
+      # volume so recreating the container does not re-download everything.
+      - maven_cache:/root/.m2
       - /var/run/docker.sock:/var/run/docker.sock
+    # Testcontainers starts sibling containers on the host Docker daemon and
+    # reaches their published ports through the host, not 172.17.0.1 (which is
+    # unreachable from this network on Docker Desktop).
+    environment:
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - ci
     # SonarQube and Nexus are required parts of this CI stack.
@@ -76,6 +86,7 @@ services:
 
 volumes:
   jenkins_home:
+  maven_cache:
   sonarqube_db:
   sonarqube_data:
   sonarqube_extensions:

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: achat
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # Flyway needs the database at startup; wait for MySQL instead of crash-looping.
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.37
+          command: ["sh", "-c", "until nc -z mysql 3306; do echo waiting for mysql; sleep 3; done"]
+      containers:
+        - name: backend
+          # Jenkins replaces DOCKERHUB_USER and the tag before applying.
+          image: DOCKERHUB_USER/achat-backend:latest
+          ports:
+            - containerPort: 8089
+          envFrom:
+            - configMapRef:
+                name: achat-config
+          env:
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: achat-db
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: achat-db
+                  key: DB_PASSWORD
+          # Probe groups are enabled by management.endpoint.health.probes.enabled.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8089
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8089
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8089
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+---
+# Internal only: the API has no authentication and is reached through nginx.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: achat
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8089
+      targetPort: 8089

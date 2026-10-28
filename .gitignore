@@ -8,3 +8,13 @@
 # Local CI overrides and secrets
 ci/.env
 ci/compose.override.yaml
+
+# Terraform (state holds infrastructure details; tfvars may hold local values)
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform/terraform.tfvars
+crash.log
+
+# AWS Learner Lab SSH key
+*.pem
