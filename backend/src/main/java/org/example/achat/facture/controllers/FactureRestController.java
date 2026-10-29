@@ -1,6 +1,5 @@
 package org.example.achat.facture.controllers;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.example.achat.facture.entities.Facture;
@@ -17,8 +16,11 @@ import java.util.List;
 @CrossOrigin("*")
 public class FactureRestController {
 
-    @Autowired
-    IFactureService factureService;
+    private final IFactureService factureService;
+
+    public FactureRestController(IFactureService factureService) {
+        this.factureService = factureService;
+    }
 
     // http://localhost:8089/SpringMVC/facture/retrieve-all-factures
     @GetMapping("/retrieve-all-factures")

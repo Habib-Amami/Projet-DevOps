@@ -14,7 +14,6 @@ import org.example.achat.operateur.repositories.OperateurRepository;
 import org.example.achat.fournisseurs.exceptions.FournisseurNotFoundException;
 import org.example.achat.fournisseurs.repositories.FournisseurRepository;
 import org.example.achat.reglements.services.ReglementServiceImpl;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -26,18 +25,27 @@ import java.util.Set;
 @Transactional
 public class FactureServiceImpl implements IFactureService {
 
-	@Autowired
-    FactureRepository factureRepository;
-	@Autowired
-	OperateurRepository operateurRepository;
-	@Autowired
-    DetailFactureRepository detailFactureRepository;
-	@Autowired
-	FournisseurRepository fournisseurRepository;
-	@Autowired
-    ProduitRepository produitRepository;
-    @Autowired
-    ReglementServiceImpl reglementService;
+	private final FactureRepository factureRepository;
+	private final OperateurRepository operateurRepository;
+	private final DetailFactureRepository detailFactureRepository;
+	private final FournisseurRepository fournisseurRepository;
+	private final ProduitRepository produitRepository;
+	private final ReglementServiceImpl reglementService;
+
+	public FactureServiceImpl(
+			FactureRepository factureRepository,
+			OperateurRepository operateurRepository,
+			DetailFactureRepository detailFactureRepository,
+			FournisseurRepository fournisseurRepository,
+			ProduitRepository produitRepository,
+			ReglementServiceImpl reglementService) {
+		this.factureRepository = factureRepository;
+		this.operateurRepository = operateurRepository;
+		this.detailFactureRepository = detailFactureRepository;
+		this.fournisseurRepository = fournisseurRepository;
+		this.produitRepository = produitRepository;
+		this.reglementService = reglementService;
+	}
 	
 	@Override
 	public List<Facture> retrieveAllFactures() {
