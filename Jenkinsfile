@@ -9,11 +9,11 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'Asma/terraform', description: 'Branche à construire')
+        string(name: 'BRANCH', defaultValue: 'develop', description: 'Branche à construire')
         booleanParam(name: 'RUN_SONAR', defaultValue: true, description: 'Analyse SonarQube')
         booleanParam(name: 'PUBLISH_NEXUS', defaultValue: true, description: 'Publier le JAR sur Nexus')
-        string(name: 'SONAR_HOST_URL', defaultValue: 'http://host.docker.internal:9000', description: 'URL SonarQube')
-        string(name: 'NEXUS_HOST', defaultValue: 'host.docker.internal:8081', description: 'Hôte Nexus, sans http://')
+        string(name: 'SONAR_HOST_URL', defaultValue: 'http://sonarqube:9000', description: 'URL SonarQube')
+        string(name: 'NEXUS_HOST', defaultValue: 'nexus:8081', description: 'Hôte Nexus, sans http://')
         booleanParam(name: 'DOCKER_PUSH', defaultValue: true, description: 'Construire et pousser les images sur Docker Hub')
         string(name: 'DOCKERHUB_USER', defaultValue: '', description: 'Utilisateur Docker Hub (préfixe des images)')
         booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
