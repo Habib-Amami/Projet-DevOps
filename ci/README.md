@@ -301,7 +301,7 @@ Stages and what to expect:
 | `PUBLISH TO NEXUS` | Uploads the JAR as snapshot and release | http://localhost:8081, `maven-snapshots` and `maven-releases` |
 | `DOCKER BUILD` | Builds `<user>/achat-backend` and `<user>/achat-frontend`, tagged with the build number and `latest` | `docker images` |
 | `DOCKER PUSH` | Pushes both images | hub.docker.com, your repositories |
-| `DEPLOY TO EKS` | Deploys to Kubernetes (only with `DEPLOY_K8S`) | URL printed at the end of the log |
+| `DEPLOY TO EKS` | Deploys the app, Grafana LGTM, and Alloy (only with `DEPLOY_K8S`) | App URL and Grafana/Swagger port-forward commands printed at the end of the log |
 
 Do not use `RUN_SONAR=false` or `PUBLISH_NEXUS=false` as a substitute for the
 mandatory setup in this project.
@@ -411,6 +411,10 @@ application source to build. Set both to the branch you intend to test.
 Terraform creates the cluster; Jenkins deploys onto it. Create the cluster
 first with [`../terraform`](../terraform/README.md) (`terraform apply`), then
 come back here.
+
+The deployment includes observability. See
+[`../observability/README.md`](../observability/README.md) for Grafana access,
+example queries, and a monitoring-only deploy onto an existing application.
 
 ### 1. Rebuild Jenkins once
 

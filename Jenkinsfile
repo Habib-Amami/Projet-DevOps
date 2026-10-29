@@ -16,7 +16,7 @@ pipeline {
         string(name: 'NEXUS_HOST', defaultValue: 'nexus:8081', description: 'Hôte Nexus, sans http://')
         booleanParam(name: 'DOCKER_PUSH', defaultValue: true, description: 'Construire et pousser les images sur Docker Hub')
         string(name: 'DOCKERHUB_USER', defaultValue: '', description: 'Utilisateur Docker Hub (préfixe des images)')
-        booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
+        booleanParam(name: 'DEPLOY_K8S', defaultValue: true, description: 'Déployer sur le cluster EKS (créé par terraform/)')
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
         string(name: 'EMAIL_TO', defaultValue: '', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
@@ -208,6 +208,10 @@ pipeline {
                         kc apply -f "$DEPLOY_DIR/secret.yaml"
                         kc apply -f "$DEPLOY_DIR"
 
+                        # Alloy reads its ConfigMap at startup; pick up config changes on redeploy.
+                        kc -n achat rollout restart deployment/alloy
+                        kc -n achat rollout status deployment/grafana-lgtm --timeout=10m
+                        kc -n achat rollout status deployment/alloy --timeout=5m
                         kc -n achat rollout status deployment/mysql --timeout=5m
                         kc -n achat rollout status deployment/backend --timeout=10m
                         kc -n achat rollout status deployment/frontend --timeout=5m
@@ -224,6 +228,8 @@ pipeline {
                           exit 1
                         fi
                         echo "Application: http://$FRONTEND_HOST"
+                        echo "Grafana: run kubectl -n achat port-forward svc/grafana-lgtm 3001:3000, then open http://localhost:3001"
+                        echo "Swagger: run kubectl -n achat port-forward svc/backend 8090:8089, then open http://localhost:8090/swagger-ui/index.html"
                     '''
                 }
             }

@@ -87,8 +87,8 @@ services:
       - "4317:4317"
       - "4318:4318"
 
-  # Reads Docker container logs and pushes them to Loki, like the cluster
-  # Alloy DaemonSet does with pod logs. The socket mount is local-only.
+  # Reads Docker container logs and pushes them to Loki. In Kubernetes, Alloy
+  # reads pod logs through the API instead. The socket mount is local-only.
   alloy:
     image: grafana/alloy:latest
     restart: unless-stopped

@@ -232,6 +232,29 @@ to reach it with `kubectl port-forward`.
 | Actuator health | <http://localhost:8089/actuator/health> |
 | Prometheus metrics | <http://localhost:8089/actuator/prometheus> |
 
+### Swagger for the backend running on EKS
+
+The cluster ConfigMap already sets `SPRINGDOC_ENABLED=true`. After deploying,
+run this on your PC with working AWS credentials and keep the terminal open:
+
+```bash
+kubectl -n achat port-forward svc/backend 8090:8089
+```
+
+Open <http://localhost:8090/swagger-ui/index.html>. The OpenAPI document is at
+<http://localhost:8090/v3/api-docs>. Swagger's **Try it out** sends requests to
+the backend running in the cluster. Local port `8090` avoids conflicting with
+the Compose backend on `8089`.
+
+Jenkins prints this command after deployment. If enabling Swagger on a running
+deployment, apply `k8s/configmap.yaml` and restart the backend to load the setting:
+
+```bash
+kubectl apply -f k8s/configmap.yaml
+kubectl -n achat rollout restart deployment/backend
+kubectl -n achat rollout status deployment/backend --timeout=10m
+```
+
 A Postman collection is available in
 [`postman/achat-api.postman_collection.json`](postman/achat-api.postman_collection.json).
 Copy `postman/achat-local.postman_environment.example.json` to a local
@@ -384,8 +407,10 @@ OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://grafana-lgtm:4318/v1/metrics
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://grafana-lgtm:4318/v1/traces
 ```
 
-Logs are collected by the Alloy DaemonSet from pod stdout, so the application
-does not export logs over OTLP. Profiling is intentionally not configured.
+Logs are collected by a single Alloy Deployment through the Kubernetes API,
+so the application does not export logs over OTLP. Profiling is intentionally
+not configured. See [`../observability/README.md`](../observability/README.md)
+for deployment and Grafana access.
 
 Because the API itself is unauthenticated, it must only be reachable inside the
 cluster: expose the frontend nginx service, keep the backend `ClusterIP`, and

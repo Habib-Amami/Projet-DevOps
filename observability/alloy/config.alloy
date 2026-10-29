@@ -1,7 +1,7 @@
 // Local Alloy configuration.
 //
 // Reads Docker container stdout/stderr and pushes it to the Loki instance
-// bundled in grafana/otel-lgtm. In the cluster the equivalent Alloy DaemonSet
+// bundled in grafana/otel-lgtm. The cluster configuration in k8s/alloy.yaml
 // discovers Kubernetes pods instead of Docker containers.
 
 discovery.docker "containers" {

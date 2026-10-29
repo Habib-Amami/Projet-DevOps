@@ -1,0 +1,89 @@
+# All-in-one LGTM backend for the Learner Lab demo, matching local Compose.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-lgtm
+  namespace: achat
+  labels:
+    app: grafana-lgtm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grafana-lgtm
+  template:
+    metadata:
+      labels:
+        app: grafana-lgtm
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: grafana-lgtm
+          image: grafana/otel-lgtm:0.38.0
+          ports:
+            - name: grafana
+              containerPort: 3000
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: loki
+              containerPort: 3100
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+          # The image creates /tmp/ready after every bundled service is ready.
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "test -f /tmp/ready"]
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      # Same demo tradeoff as MySQL: data survives container restarts, not pod replacement.
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-lgtm
+  namespace: achat
+spec:
+  type: ClusterIP
+  selector:
+    app: grafana-lgtm
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: grafana
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: loki
+      port: 3100
+      targetPort: loki
