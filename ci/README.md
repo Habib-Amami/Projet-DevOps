@@ -17,9 +17,9 @@ Compose project.
 
 | Service | URL | Purpose |
 | --- | --- | --- |
-| Jenkins | http://localhost:8080 | Runs the pipeline |
-| SonarQube | http://localhost:9000 | Code analysis |
-| Nexus | http://localhost:8081 | Stores the Maven artifact |
+| Jenkins | <http://localhost:8080> | Runs the pipeline |
+| SonarQube | <http://localhost:9000> | Code analysis |
+| Nexus | <http://localhost:8081> | Stores the Maven artifact |
 | PostgreSQL | internal only | Database for SonarQube |
 
 Jenkins, SonarQube, PostgreSQL, and Nexus are all required parts of this stack.
@@ -211,6 +211,17 @@ repository with:
 - Version policy: `Snapshot`
 - Deployment policy: `Allow redeploy`
 
+Also verify or create a **maven2 (hosted)** repository with:
+
+- Name: `maven-releases`
+- Version policy: `Release`
+- Deployment policy: `Allow redeploy`
+
+For this demo, `PUBLISH TO NEXUS` uploads the same built JAR as
+`0.0.1-SNAPSHOT` to `maven-snapshots` and as `0.0.1` to `maven-releases`.
+Allow redeploy on both repositories so rerunning CI can overwrite those
+coordinates. The JAR's embedded Maven version remains `0.0.1-SNAPSHOT`.
+
 Create the Jenkins credential:
 
 1. Open **Manage Jenkins** -> **Credentials** -> **System** ->
@@ -236,6 +247,7 @@ Do not run the pipeline until all of these are true:
 - [ ] Nexus is reachable at http://localhost:8081
 - [ ] Jenkins has a Username with password credential with ID `nexus-credentials`
 - [ ] Nexus has the `maven-snapshots` repository
+- [ ] Nexus has the `maven-releases` repository; both repositories allow redeploy
 - [ ] Jenkins can run Docker commands through `/var/run/docker.sock`
 
 ## Create the pipeline job
@@ -276,6 +288,7 @@ Open the job and click **Build with Parameters**:
 | `DEPLOY_K8S` | unchecked for the first run (see the next section) |
 | `EKS_CLUSTER` | `achat-eks` |
 | `AWS_REGION` | `us-east-1` |
+| `EMAIL_TO` | recipient address(es), separated by commas; leave empty to skip email |
 
 Stages and what to expect:
 
@@ -285,7 +298,7 @@ Stages and what to expect:
 | `MVN CLEAN` / `ARTIFACT CONSTRUCTION` | Builds the JAR | Build artifacts |
 | `UNIT TESTS` | 75 tests; the context test starts MySQL with Testcontainers | **Test Result** page |
 | `MVN SONARQUBE` | Code analysis | http://localhost:9000, project `achat` |
-| `PUBLISH TO NEXUS` | Uploads the JAR | http://localhost:8081, `maven-snapshots` |
+| `PUBLISH TO NEXUS` | Uploads the JAR as snapshot and release | http://localhost:8081, `maven-snapshots` and `maven-releases` |
 | `DOCKER BUILD` | Builds `<user>/achat-backend` and `<user>/achat-frontend`, tagged with the build number and `latest` | `docker images` |
 | `DOCKER PUSH` | Pushes both images | hub.docker.com, your repositories |
 | `DEPLOY TO EKS` | Deploys to Kubernetes (only with `DEPLOY_K8S`) | URL printed at the end of the log |
@@ -304,6 +317,94 @@ mandatory setup in this project.
 - `UNIT TESTS` always starts a real MySQL container, so it keeps taking a few
   minutes. Stop the local application stack (`docker compose down` from the
   repository root) while Jenkins runs to free memory.
+
+## Email notifications with Gmail
+
+The pipeline sends one plain-text notification after every build, including
+failed or aborted builds, when `EMAIL_TO` is set. The message contains the build
+result, branch, and links to the build and console. Email delivery errors are
+logged without changing the original CI result. Leaving `EMAIL_TO` empty skips
+notifications, so SMTP setup is optional until you want to test it.
+
+### Install the email plugin
+
+`email-ext` is included in `plugins.txt`. From `ci/`, rebuild and recreate Jenkins:
+
+```bash
+docker compose up -d --build --no-deps jenkins
+```
+
+Wait for Jenkins to restart, then check **Manage Jenkins -> Plugins -> Installed**
+for **Email Extension**. The existing Jenkins named volume keeps jobs and credentials.
+
+### Configure Gmail SMTP
+
+1. Enable **2-Step Verification** on the Gmail account that will send mail.
+2. Create a Google **App password** for Jenkins. If app passwords are unavailable,
+   check your account or organization restrictions. Use the app password for SMTP.
+3. In Jenkins, create a **Username with password** credential with ID `gmail-smtp`:
+   username = the full Gmail address; password = the Google app password.
+4. Open **Manage Jenkins -> System -> Extended E-mail Notification** and configure:
+
+   | Setting | Value |
+   | --- | --- |
+   | SMTP server | `smtp.gmail.com` |
+   | SMTP port | `587` |
+   | Credentials / SMTP authentication | `gmail-smtp` |
+   | Use TLS / STARTTLS | enabled |
+   | Use SSL | disabled |
+
+5. Under **Jenkins Location**, set **System Admin e-mail address** to the sending
+   Gmail address and **Jenkins URL** to the address you use to open Jenkins
+   (for example `http://localhost:8080/`). Save the configuration.
+
+Keep the app password in Jenkins credentials; it is not a pipeline parameter
+and does not belong in `.env` or Git. The recipient is supplied through `EMAIL_TO`.
+
+References: [Google app passwords](https://support.google.com/accounts/answer/185833),
+[Gmail SMTP](https://developers.google.com/workspace/gmail/imap/imap-smtp), and
+[Jenkins Email Extension](https://plugins.jenkins.io/email-ext/).
+
+### Test email delivery first
+
+To verify SMTP without running the application CI, create a temporary Jenkins
+**Pipeline** job, choose **Pipeline script**, and paste:
+
+```groovy
+pipeline {
+    agent any
+    parameters {
+        string(name: 'EMAIL_TO', defaultValue: '', description: 'Test recipient')
+    }
+    stages {
+        stage('TEST EMAIL') {
+            steps {
+                script {
+                    if (!params.EMAIL_TO?.trim()) {
+                        error 'Set EMAIL_TO and run Build with Parameters.'
+                    }
+                    emailext(
+                        to: params.EMAIL_TO.trim(),
+                        subject: "Jenkins email test #${env.BUILD_NUMBER}",
+                        body: "Gmail SMTP is working. Build: ${env.BUILD_URL}",
+                        mimeType: 'text/plain'
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+Save and run the job once to register its parameter, then use **Build with
+Parameters** and enter `EMAIL_TO`. Check the inbox and spam folder. This test job
+does not suppress email errors, so authentication or connection problems are
+visible in its console and build result.
+
+After that succeeds, configure the application job to load the updated
+`Jenkinsfile` from your pushed feature branch and supply `EMAIL_TO`. Its SCM
+branch specifier selects the pipeline file; its `BRANCH` parameter selects the
+application source to build. Set both to the branch you intend to test.
 
 ## Continuous delivery: Docker Hub and EKS
 
