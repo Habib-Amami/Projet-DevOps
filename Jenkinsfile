@@ -16,7 +16,7 @@ pipeline {
         string(name: 'NEXUS_HOST', defaultValue: 'nexus:8081', description: 'Hôte Nexus, sans http://')
         booleanParam(name: 'DOCKER_PUSH', defaultValue: true, description: 'Construire et pousser les images sur Docker Hub')
         string(name: 'DOCKERHUB_USER', defaultValue: '', description: 'Utilisateur Docker Hub (préfixe des images)')
-        booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
+        booleanParam(name: 'DEPLOY_K8S', defaultValue: true, description: 'Déployer sur le cluster EKS (créé par terraform/)')
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
         string(name: 'EMAIL_TO', defaultValue: '', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
