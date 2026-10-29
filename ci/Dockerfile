@@ -25,7 +25,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # Docker CLI only. Docker Desktop or Docker Engine provides the daemon.
 # The buildx plugin is required by the frontend Dockerfile (RUN --mount).
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=docker/buildx-bin:v0.23.0 /buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+COPY --from=docker:cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 RUN docker buildx version
 
 # AWS CLI v2 and kubectl for the DEPLOY TO EKS stage.
@@ -33,9 +33,14 @@ ARG KUBECTL_VERSION=v1.34.2
 RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip \
     && unzip -q /tmp/awscliv2.zip -d /tmp \
     && /tmp/aws/install \
-    && rm -rf /tmp/aws /tmp/awscliv2.zip \
-    && curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl \
-    && chmod +x /usr/local/bin/kubectl
+    && rm -rf /tmp/aws /tmp/awscliv2.zip
+RUN curl --fail --show-error --location \
+      --retry 5 --retry-all-errors --retry-delay 10 \
+      --connect-timeout 30 --max-time 300 \
+      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+      -o /usr/local/bin/kubectl \
+    && chmod +x /usr/local/bin/kubectl \
+    && kubectl version --client
 
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
