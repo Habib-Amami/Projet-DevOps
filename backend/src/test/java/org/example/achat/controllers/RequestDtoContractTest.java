@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -46,6 +48,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -144,6 +147,32 @@ class RequestDtoContractTest {
                         """, "idFacture", 200),
                 Arguments.of("/reglements", withFields(PAYMENT, "\"idReglement\":999,\"factureId\":10"),
                         "idReglement", 201));
+    }
+
+    @ParameterizedTest(name = "POST {0} works through the Angular development proxy")
+    @MethodSource("createRequests")
+    void proxiedRequestsNeedNoCrossOriginPermission(String path, String payload, String idField, int responseStatus) throws Exception {
+        // The dev proxy rewrites Host but can retain the browser's original Origin.
+        mvc.perform(post("http://localhost:8089" + path)
+                        .header(HttpHeaders.ORIGIN, "http://localhost:4200")
+                        .contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().is(responseStatus))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @ParameterizedTest(name = "OPTIONS {0} grants no cross-origin access")
+    @MethodSource("createRequests")
+    void crossOriginPreflightsGrantNoPermission(String path, String payload, String idField, int responseStatus) throws Exception {
+        mvc.perform(options(path)
+                        .header(HttpHeaders.ORIGIN, "https://untrusted.example")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS));
+        verifyNoInteractions(stockService, produitService, categorieService, fournisseurService,
+                secteurService, operateurService, factureService, reglementService);
     }
 
     @ParameterizedTest(name = "PUT {0} uses the path identifier")

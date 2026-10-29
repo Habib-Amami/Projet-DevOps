@@ -14,7 +14,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/operateurs")
-@CrossOrigin("*")
 public class OperateurController {
 
 	private final IOperateurService operateurService;

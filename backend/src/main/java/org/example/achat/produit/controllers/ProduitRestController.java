@@ -14,7 +14,6 @@ import java.util.List;
 
 @RestController
 @Slf4j
-@CrossOrigin("*")
 @RequestMapping("/produits")
 public class ProduitRestController {
 

@@ -202,6 +202,36 @@ has no end-user authentication, so the backend must remain internal
 `SPRINGDOC_ENABLED=true`; set it to `true` in the cluster only if you still want
 to reach it with `kubectl port-forward`.
 
+### CSRF and CORS review
+
+The demo API permits anonymous requests. It does not authenticate callers through
+session cookies, HTTP Basic, form login, or another browser-managed credential.
+CSRF protection remains intentionally disabled under those assumptions. Merely
+setting a stateless session policy would not make cookie-authenticated requests
+safe from CSRF. Revisit this decision before adding authentication that browsers
+attach automatically.
+
+For the CSRF hotspot in SonarQube, use the following review rationale after
+checking that these assumptions still hold for the deployed environment:
+
+> All API requests are anonymous. Form login and HTTP Basic are disabled, the
+> security chain is stateless, and no cookie establishes an authenticated user.
+> There is no browser-managed authenticated identity to reuse through CSRF.
+> Reassess this configuration if cookie-based authentication or HTTP Basic is added.
+
+The code keeps the explicit CSRF setting so this decision remains visible.
+The hotspot still requires a manual review in SonarQube; a code comment does not
+mark it reviewed. This configuration does not provide end-user access control.
+
+Controllers do not enable CORS. Angular uses `/api` through the development proxy
+or nginx, and Swagger calls its own backend origin. No cross-origin permission is
+needed for these flows. Cross-origin preflight requests receive no permission;
+ordinary cross-origin responses have no `Access-Control-Allow-Origin` header.
+CORS is a browser response-sharing policy, not API authentication or a firewall.
+
+References: [Spring Security CSRF considerations](https://docs.spring.io/spring-security/reference/features/exploits/csrf.html)
+and [Spring transaction rollback rules](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
+
 ## Database and seed data
 
 - Flyway owns the schema: `db/migration/V1__init.sql` is the baseline and future

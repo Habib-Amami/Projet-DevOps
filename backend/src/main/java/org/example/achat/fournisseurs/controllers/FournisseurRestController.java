@@ -18,7 +18,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/fournisseurs")
-@CrossOrigin("*")
 public class FournisseurRestController {
 
 	private final IFournisseurService fournisseurService;

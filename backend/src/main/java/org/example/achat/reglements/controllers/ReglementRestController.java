@@ -22,7 +22,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/reglements")
-@CrossOrigin("*")
 public class ReglementRestController {
 
 	private final IReglementService reglementService;

@@ -20,7 +20,6 @@ import java.util.List;
 @RestController
 @Slf4j
 @RequestMapping("/stocks")
-@CrossOrigin("*")
 @Tag(name = "Stocks", description = "Stock inventory management")
 public class StockRestController {
 

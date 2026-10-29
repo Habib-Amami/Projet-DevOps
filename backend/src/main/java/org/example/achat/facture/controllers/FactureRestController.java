@@ -15,7 +15,6 @@ import java.util.List;
 @RestController
 @Tag(name = "Factures", description = "Invoice management")
 @RequestMapping("/facture")
-@CrossOrigin("*")
 public class FactureRestController {
 
     private final IFactureService factureService;
