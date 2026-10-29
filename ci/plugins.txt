@@ -4,3 +4,4 @@ junit
 timestamper
 credentials-binding
 nexus-artifact-uploader
+email-ext

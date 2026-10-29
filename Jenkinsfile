@@ -19,6 +19,7 @@ pipeline {
         booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
+        string(name: 'EMAIL_TO', defaultValue: '', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
     }
 
     environment {
@@ -40,6 +41,28 @@ pipeline {
                 }
             }
         }
+        stage('BACKEND TESTS') {
+            steps {
+                dir('backend') {
+                    sh 'sh ./mvnw -B test'
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'backend/target/surefire-reports/*.xml', allowEmptyResults: true
+                }
+            }
+        }
+        stage('FRONTEND TESTS') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        npm ci --no-audit --no-fund
+                        npm test -- --watch=false
+                    '''
+                }
+            }
+        }
         stage('ARTIFACT CONSTRUCTION') {
             steps {
                 dir('backend') {
@@ -49,18 +72,6 @@ pipeline {
             post {
                 success {
                     archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
-                }
-            }
-        }
-        stage('UNIT TESTS') {
-            steps {
-                dir('backend') {
-                    sh 'sh ./mvnw -B test'
-                }
-            }
-            post {
-                always {
-                    junit testResults: 'backend/target/surefire-reports/*.xml', allowEmptyResults: true
                 }
             }
         }
@@ -92,6 +103,20 @@ pipeline {
                     groupId: 'org.example',
                     version: '0.0.1-SNAPSHOT',
                     repository: 'maven-snapshots',
+                    credentialsId: 'nexus-credentials',
+                    artifacts: [
+                        [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
+                    ]
+                )
+                // Publish the same JAR under fixed release coordinates for the demo.
+                // maven-releases must allow redeploy so subsequent builds can overwrite it.
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: params.NEXUS_HOST,
+                    groupId: 'org.example',
+                    version: '0.0.1',
+                    repository: 'maven-releases',
                     credentialsId: 'nexus-credentials',
                     artifacts: [
                         [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
@@ -187,8 +212,48 @@ pipeline {
                         kc -n achat rollout status deployment/backend --timeout=10m
                         kc -n achat rollout status deployment/frontend --timeout=5m
                         kc -n achat get pods,svc
-                        echo "Application: http://$(kc -n achat get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+
+                        # Pod readiness does not guarantee AWS has assigned a public hostname yet.
+                        echo "Waiting for the AWS load balancer hostname..."
+                        kubectl -n achat wait service/frontend \
+                          --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m
+                        FRONTEND_HOST=$(kubectl -n achat get svc frontend --request-timeout=30s \
+                          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+                        if [ -z "$FRONTEND_HOST" ]; then
+                          echo "AWS load balancer hostname is empty" >&2
+                          exit 1
+                        fi
+                        echo "Application: http://$FRONTEND_HOST"
                     '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                def recipients = params.EMAIL_TO?.trim()
+                if (recipients) {
+                    // A mail delivery error must not replace the original CI result.
+                    catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS', catchInterruptions: false,
+                               message: 'Email notification failed; keeping the original build result.') {
+                        emailext(
+                            to: recipients,
+                            subject: "[${currentBuild.currentResult}] ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                            mimeType: 'text/plain',
+                            body: """Result: ${currentBuild.currentResult}
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Branch: ${params.BRANCH}
+
+Build details: ${env.BUILD_URL}
+Console output: ${env.BUILD_URL}console
+"""
+                        )
+                    }
+                } else {
+                    echo 'Email notification skipped: EMAIL_TO is empty.'
                 }
             }
         }
