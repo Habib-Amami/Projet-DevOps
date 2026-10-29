@@ -35,7 +35,7 @@ data "aws_subnets" "default" {
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   role_arn = data.aws_iam_role.lab.arn
-
+  bootstrap_self_managed_addons = false
   vpc_config {
     subnet_ids = data.aws_subnets.default.ids
   }
