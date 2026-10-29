@@ -19,6 +19,7 @@ pipeline {
         booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
+        choice(name: 'TERRAFORM_ACTION', choices: ['none', 'plan', 'apply', 'destroy'], description: 'Action Terraform (none = ne rien faire)')
     }
 
     environment {
@@ -138,6 +139,29 @@ pipeline {
                 }
             }
         }
+
+
+
+                stage('TERRAFORM') {
+            when { expression { params.TERRAFORM_ACTION != 'none' } }
+            steps {
+                withCredentials([file(credentialsId: 'aws-learner-lab', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    dir('terraform') {
+                        sh '''
+                            export AWS_DEFAULT_REGION="$AWS_REGION"
+                            terraform init -input=false
+                            case "$TERRAFORM_ACTION" in
+                              plan)    terraform plan -input=false ;;
+                              apply)   terraform apply -input=false -auto-approve ;;
+                              destroy) terraform destroy -input=false -auto-approve ;;
+                            esac
+                        '''
+                    }
+                }
+            }
+        }
+
+        
         stage('DEPLOY TO EKS') {
             when { expression { params.DOCKER_PUSH && params.DEPLOY_K8S } }
             steps {
