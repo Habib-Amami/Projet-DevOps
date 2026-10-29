@@ -212,6 +212,8 @@ to reach it with `kubectl port-forward`.
   at `V1` (`baseline-on-migrate`); fresh databases run `V1` normally.
 - Seeding runs only when `APP_SEED_ENABLED=true`; it is enabled by the root
   Compose stack and disabled by default.
+- Seed-file I/O or JSON parsing failures roll back the entire seed transaction,
+  as do runtime failures. Earlier inserts are not committed after a partial run.
 - Seed files live in `src/main/resources/seed/` (`stocks.json`,
   `products.json`, `categories.json`, `fournisseurs.json`, `secteurs.json`,
   `operateurs.json`, `factures.json`) and are loaded by
