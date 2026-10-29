@@ -129,8 +129,11 @@ Check from your PC at any time:
 kubectl -n achat get pods,svc
 ```
 
-All 3 pods (`mysql`, `backend`, `frontend`) must be `Running` and `READY 1/1`,
-and the `frontend` service must have an `EXTERNAL-IP`.
+The application and monitoring pods (`mysql`, `backend`, `frontend`,
+`grafana-lgtm`, `alloy`) must be `Running` and `READY 1/1`, and the `frontend`
+service must have an `EXTERNAL-IP`. Open Grafana with
+`kubectl -n achat port-forward svc/grafana-lgtm 3001:3000`, then visit
+<http://localhost:3001>. See [`../observability/README.md`](../observability/README.md).
 
 ### Manual deploy (without Jenkins)
 

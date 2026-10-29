@@ -263,9 +263,12 @@ Open <http://localhost:3000> and use `admin` / `admin`:
 
 The application exports metrics and traces itself. It does **not** export logs:
 Spring Boot's OTLP logging requires an extra Logback appender, and that would
-still miss nginx, MySQL and container crash output. Alloy is the log collector,
-matching the Alloy DaemonSet used in the cluster. Profiling is intentionally out
+still miss nginx, MySQL and container crash output. Alloy collects Docker logs
+locally and Kubernetes pod logs in the cluster. Profiling is intentionally out
 of scope.
+
+For EKS deployment, Grafana access, and example queries, see
+[`observability/README.md`](observability/README.md).
 
 ## Local development with native tooling
 
