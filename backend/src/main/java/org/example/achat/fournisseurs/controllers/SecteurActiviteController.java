@@ -2,6 +2,7 @@ package org.example.achat.fournisseurs.controllers;
 
 import jakarta.validation.Valid;
 import org.example.achat.fournisseurs.dto.SecteurActiviteResponse;
+import org.example.achat.fournisseurs.dto.SecteurActiviteRequest;
 import org.example.achat.fournisseurs.entities.SecteurActivite;
 import org.example.achat.fournisseurs.services.ISecteurActiviteService;
 import org.springframework.http.HttpStatus;
@@ -35,9 +36,9 @@ public class SecteurActiviteController {
 
 	@PostMapping
 	public ResponseEntity<SecteurActiviteResponse> addSecteurActivite(
-			@Valid @RequestBody SecteurActivite secteurActivite) {
+			@Valid @RequestBody SecteurActiviteRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(toResponse(secteurActiviteService.addSecteurActivite(secteurActivite)));
+				.body(toResponse(secteurActiviteService.addSecteurActivite(toEntity(request))));
 	}
 
 	@DeleteMapping("/{secteurActiviteId}")
@@ -49,9 +50,17 @@ public class SecteurActiviteController {
 	@PutMapping("/{secteurActiviteId}")
 	public ResponseEntity<SecteurActiviteResponse> modifySecteurActivite(
 			@PathVariable Long secteurActiviteId,
-			@Valid @RequestBody SecteurActivite secteurActivite) {
+			@Valid @RequestBody SecteurActiviteRequest request) {
+		SecteurActivite secteurActivite = toEntity(request);
 		secteurActivite.setIdSecteurActivite(secteurActiviteId);
 		return ResponseEntity.ok(toResponse(secteurActiviteService.updateSecteurActivite(secteurActivite)));
+	}
+
+	private SecteurActivite toEntity(SecteurActiviteRequest request) {
+		SecteurActivite secteurActivite = new SecteurActivite();
+		secteurActivite.setCodeSecteurActivite(request.codeSecteurActivite());
+		secteurActivite.setLibelleSecteurActivite(request.libelleSecteurActivite());
+		return secteurActivite;
 	}
 
 	private SecteurActiviteResponse toResponse(SecteurActivite secteurActivite) {

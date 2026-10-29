@@ -2,6 +2,7 @@ package org.example.achat.produit.controllers;
 
 import jakarta.validation.Valid;
 import org.example.achat.produit.dto.CategorieProduitResponse;
+import org.example.achat.produit.dto.CategorieProduitRequest;
 import org.example.achat.produit.entities.CategorieProduit;
 import org.example.achat.produit.services.ICategorieProduitService;
 import org.springframework.http.HttpStatus;
@@ -34,9 +35,9 @@ public class CategorieProduitController {
 
 	@PostMapping
 	public ResponseEntity<CategorieProduitResponse> addCategorieProduit(
-			@Valid @RequestBody CategorieProduit categorieProduit) {
+			@Valid @RequestBody CategorieProduitRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(toResponse(categorieProduitService.addCategorieProduit(categorieProduit)));
+				.body(toResponse(categorieProduitService.addCategorieProduit(toEntity(request))));
 	}
 
 	@DeleteMapping("/{categorieProduitId}")
@@ -48,9 +49,17 @@ public class CategorieProduitController {
 	@PutMapping("/{categorieProduitId}")
 	public ResponseEntity<CategorieProduitResponse> modifyCategorieProduit(
 			@PathVariable Long categorieProduitId,
-			@Valid @RequestBody CategorieProduit categorieProduit) {
+			@Valid @RequestBody CategorieProduitRequest request) {
+		CategorieProduit categorieProduit = toEntity(request);
 		categorieProduit.setIdCategorieProduit(categorieProduitId);
 		return ResponseEntity.ok(toResponse(categorieProduitService.updateCategorieProduit(categorieProduit)));
+	}
+
+	private CategorieProduit toEntity(CategorieProduitRequest request) {
+		CategorieProduit categorieProduit = new CategorieProduit();
+		categorieProduit.setCodeCategorie(request.codeCategorie());
+		categorieProduit.setLibelleCategorie(request.libelleCategorie());
+		return categorieProduit;
 	}
 
 	private CategorieProduitResponse toResponse(CategorieProduit categorieProduit) {

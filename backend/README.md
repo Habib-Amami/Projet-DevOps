@@ -285,21 +285,39 @@ unknown ids are returned as `ProblemDetail` JSON with status `404`.
 | Payments | `GET/POST /reglements`, `GET/PUT/DELETE /reglements/{id}`, `GET /reglements/facture/{factureId}`, `GET /reglements/revenue?startDate=yyyy-MM-dd&endDate=yyyy-MM-dd` |
 | Invoices | `GET /facture/retrieve-all-factures`, `GET /facture/retrieve-facture/{id}`, `POST /facture/add-facture`, `PUT /facture/cancel-facture/{id}`, `GET /facture/getFactureByFournisseur/{fournisseurId}`, `PUT /facture/assignOperateurToFacture/{operateurId}/{factureId}`, `GET /facture/pourcentageRecouvrement/{startDate}/{endDate}` |
 
-Request bodies use the entity field names (for example a stock is
+Request bodies use validated request DTOs with the existing field names (for example a stock is
 `{"libelleStock": "Main", "qte": 10, "qteMin": 2}`). Dates are sent as
 `yyyy-MM-dd`.
 
+DTOs explicitly map writable fields to new entities inside the controllers.
+Create requests cannot select database-generated IDs, and update IDs come from
+the URL. Entity associations are not bound from nested JSON. Supplier details
+use a nested DTO with validated address, matricule, and optional email/date;
+their database ID and supplier back-reference cannot be submitted.
+
+Payment creation uses an existing invoice's `factureId`, for example:
+
+```json
+{
+  "montantPaye": 20,
+  "montantRestant": 80,
+  "payee": false,
+  "dateReglement": "2026-10-29",
+  "factureId": 1
+}
+```
+
+An unknown invoice returns `404`. On payment update, `factureId` can be omitted:
+the existing invoice association is preserved. The web UI currently exposes
+payment listing, details, deletion, filtering, and revenue queries.
+
 ## Known API limitations
 
-- `POST`/`PUT /reglements` always answer `400`: `Reglement.facture` is required
-  (`@NotNull`) but ignored in JSON (`@JsonIgnore`), so a payment cannot be
-  created or edited through the API. The web UI therefore only lists, shows and
-  deletes payments.
 - Invoices have no update or delete endpoint; they can only be cancelled
   (archived). Invoice lines and the supplier of an invoice cannot be set
   through `add-facture`.
-- A product's category cannot be set through the API (`categorieProduit` is
-  ignored in JSON); only its stock can be assigned.
+- A product's category cannot be set through the request DTO; only its stock
+  can be assigned, through `PUT /produits/{id}/stock/{stockId}`.
 - Creating a supplier requires `detailFournisseur.adresse` and
   `detailFournisseur.matricule`. On update, omitting `detailFournisseur` keeps
   the existing details.

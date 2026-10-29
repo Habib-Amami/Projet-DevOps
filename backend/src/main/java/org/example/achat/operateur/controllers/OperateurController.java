@@ -2,6 +2,7 @@ package org.example.achat.operateur.controllers;
 
 import jakarta.validation.Valid;
 import org.example.achat.operateur.dto.OperateurResponse;
+import org.example.achat.operateur.dto.OperateurRequest;
 import org.example.achat.operateur.entities.Operateur;
 import org.example.achat.operateur.services.IOperateurService;
 import org.springframework.http.HttpStatus;
@@ -35,9 +36,9 @@ public class OperateurController {
 	}
 
 	@PostMapping
-	public ResponseEntity<OperateurResponse> addOperateur(@Valid @RequestBody Operateur operateur) {
+	public ResponseEntity<OperateurResponse> addOperateur(@Valid @RequestBody OperateurRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(toResponse(operateurService.addOperateur(operateur)));
+				.body(toResponse(operateurService.addOperateur(toEntity(request))));
 	}
 
 	@DeleteMapping("/{operateurId}")
@@ -49,9 +50,18 @@ public class OperateurController {
 	@PutMapping("/{operateurId}")
 	public ResponseEntity<OperateurResponse> modifyOperateur(
 			@PathVariable Long operateurId,
-			@Valid @RequestBody Operateur operateur) {
+			@Valid @RequestBody OperateurRequest request) {
+		Operateur operateur = toEntity(request);
 		operateur.setIdOperateur(operateurId);
 		return ResponseEntity.ok(toResponse(operateurService.updateOperateur(operateur)));
+	}
+
+	private Operateur toEntity(OperateurRequest request) {
+		Operateur operateur = new Operateur();
+		operateur.setNom(request.nom());
+		operateur.setPrenom(request.prenom());
+		operateur.setPassword(request.password());
+		return operateur;
 	}
 
 	private OperateurResponse toResponse(Operateur operateur) {

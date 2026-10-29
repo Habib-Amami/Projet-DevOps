@@ -1,5 +1,7 @@
 package org.example.achat.facture.controllers;
 
+import jakarta.validation.Valid;
+import org.example.achat.facture.dto.FactureRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.example.achat.facture.entities.Facture;
@@ -40,7 +42,13 @@ public class FactureRestController {
     // http://localhost:8089/SpringMVC/facture/add-facture/{fournisseur-id}
     @PostMapping("/add-facture")
     @ResponseBody
-    public Facture addFacture(@RequestBody Facture f) {
+    public Facture addFacture(@Valid @RequestBody FactureRequest request) {
+        Facture f = new Facture();
+        f.setMontantRemise(request.montantRemise());
+        f.setMontantFacture(request.montantFacture());
+        f.setDateCreationFacture(request.dateCreationFacture());
+        f.setDateDerniereModificationFacture(request.dateDerniereModificationFacture());
+        f.setArchivee(request.archivee());
         Facture facture = factureService.addFacture(f);
         return facture;
     }
