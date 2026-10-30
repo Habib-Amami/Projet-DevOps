@@ -147,14 +147,12 @@ Create the Jenkins credential:
 3. Set **ID** to `sonar-token`.
 4. Paste the SonarQube token.
 
-When you run the Jenkins job, set the `SONAR_HOST_URL` parameter to:
+The `SONAR_HOST_URL` job parameter must be the SonarQube service name on the CI
+Compose network. This is already the Jenkinsfile default:
 
 ```text
 SONAR_HOST_URL=http://sonarqube:9000
 ```
-
-Do not use the `host.docker.internal` default from the Jenkinsfile with this
-Compose stack.
 
 #### SonarQube on Linux
 
@@ -260,7 +258,7 @@ In Jenkins:
 4. Use:
    - SCM: Git
    - Repository URL: `https://github.com/Habib-Amami/Projet-DevOps.git`
-   - Branch specifier: `*/Asma/terraform` (use `*/develop` once the branch is merged)
+   - Branch specifier: `*/develop`
    - Script path: `Jenkinsfile`
 5. Save the job.
 
@@ -278,14 +276,14 @@ Open the job and click **Build with Parameters**:
 
 | Parameter | Value |
 | --- | --- |
-| `BRANCH` | `Asma/terraform` |
+| `BRANCH` | `develop` |
 | `RUN_SONAR` | checked |
 | `PUBLISH_NEXUS` | checked |
-| `SONAR_HOST_URL` | `http://sonarqube:9000` (**not** the `host.docker.internal` default) |
-| `NEXUS_HOST` | `nexus:8081` |
+| `SONAR_HOST_URL` | `http://sonarqube:9000` (default) |
+| `NEXUS_HOST` | `nexus:8081` (default) |
 | `DOCKER_PUSH` | checked |
 | `DOCKERHUB_USER` | your Docker Hub username |
-| `DEPLOY_K8S` | unchecked for the first run (see the next section) |
+| `DEPLOY_K8S` | **uncheck it** for the first run; it is checked by default and fails if no EKS cluster exists (see the next section) |
 | `EKS_CLUSTER` | `achat-eks` |
 | `AWS_REGION` | `us-east-1` |
 | `EMAIL_TO` | recipient address(es), separated by commas; leave empty to skip email |
@@ -295,8 +293,10 @@ Stages and what to expect:
 | Stage | What it does | Where to check |
 | --- | --- | --- |
 | `CHECKOUT GIT` | Clones `BRANCH` from GitHub | Console log |
-| `MVN CLEAN` / `ARTIFACT CONSTRUCTION` | Builds the JAR | Build artifacts |
-| `UNIT TESTS` | 75 tests; the context test starts MySQL with Testcontainers | **Test Result** page |
+| `MVN CLEAN` | Cleans the backend build | Console log |
+| `BACKEND TESTS` | Maven tests; the context test starts MySQL with Testcontainers | **Test Result** page |
+| `FRONTEND TESTS` | `npm ci` then the Angular unit tests | Console log |
+| `ARTIFACT CONSTRUCTION` | Builds the JAR | Build artifacts |
 | `MVN SONARQUBE` | Code analysis | http://localhost:9000, project `achat` |
 | `PUBLISH TO NEXUS` | Uploads the JAR as snapshot and release | http://localhost:8081, `maven-snapshots` and `maven-releases` |
 | `DOCKER BUILD` | Builds `<user>/achat-backend` and `<user>/achat-frontend`, tagged with the build number and `latest` | `docker images` |
@@ -314,7 +314,7 @@ mandatory setup in this project.
   Docker reuses unchanged layers (only your code is recompiled when `pom.xml`
   and `package-lock.json` did not change), and Docker Hub only receives the
   layers that changed.
-- `UNIT TESTS` always starts a real MySQL container, so it keeps taking a few
+- `BACKEND TESTS` always starts a real MySQL container, so it keeps taking a few
   minutes. Stop the local application stack (`docker compose down` from the
   repository root) while Jenkins runs to free memory.
 
@@ -475,7 +475,8 @@ tested.
 
 Delete the application and the cluster, as described in
 [`../terraform/README.md`](../terraform/README.md#step-5---clean-up-after-every-demo).
-Leave `DEPLOY_K8S` unchecked while no cluster exists.
+`DEPLOY_K8S` is checked by default: uncheck it on every run while no cluster
+exists.
 
 ## Common first-run failures
 
@@ -486,17 +487,15 @@ credential with ID `sonar-token` as described in the SonarQube section.
 
 ### SonarQube connection failure
 
-The Jenkinsfile default is:
-
-```text
-http://host.docker.internal:9000
-```
-
-That address is not valid for this Compose network. Set the job parameter to:
+Check that the `SONAR_HOST_URL` job parameter is the Compose service name (the
+Jenkinsfile default), not `localhost` or `host.docker.internal`:
 
 ```text
 SONAR_HOST_URL=http://sonarqube:9000
 ```
+
+Also check that SonarQube reports `UP` at
+`http://localhost:9000/api/system/status`.
 
 ### `Could not find credentials entry with ID 'nexus-credentials'`
 
@@ -524,7 +523,7 @@ docker compose restart sonarqube
 The next start runs the database migrations and can take several minutes.
 `curl -s http://localhost:9000/api/system/status` shows `UP` when it is ready.
 
-### `UNIT TESTS`: `Could not connect to Ryuk at 172.17.0.1`
+### `BACKEND TESTS`: `Could not connect to Ryuk at 172.17.0.1`
 
 Testcontainers runs inside the Jenkins container and must reach the test
 containers through the host. `compose.yaml` sets
@@ -535,7 +534,7 @@ error, recreate Jenkins so it picks up the setting:
 docker compose up -d jenkins
 ```
 
-### `UNIT TESTS`: `Can't get Docker image` or startup timeouts
+### `BACKEND TESTS`: `Can't get Docker image` or startup timeouts
 
 The machine is short on memory or the image download is slow. Stop the local
 application stack (`docker compose down` from the repository root) and pull the
