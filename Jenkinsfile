@@ -20,6 +20,7 @@ pipeline {
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
         string(name: 'EMAIL_TO', defaultValue: '', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
+        choice(name: 'TERRAFORM_ACTION', choices: ['none', 'plan', 'apply', 'destroy'], description: 'Action Terraform (none = ne rien faire)')
     }
 
     environment {
@@ -42,14 +43,34 @@ pipeline {
             }
         }
         stage('BACKEND TESTS') {
+            environment {
+                TESTCONTAINERS_RYUK_DISABLED = 'true'
+            }
             steps {
                 dir('backend') {
-                    sh 'sh ./mvnw -B test'
+                    sh '''#!/bin/bash
+                        # Docker Desktop : les ports publiés sont joignables via host.docker.internal.
+                        # Docker Linux natif : on garde la passerelle par défaut du conteneur.
+                        if getent hosts host.docker.internal >/dev/null 2>&1; then
+                          GW=host.docker.internal
+                        else
+                          h=$(awk '$2=="00000000"{print $3; exit}' /proc/net/route)
+                          if [ -n "$h" ]; then
+                            GW=$(printf '%d.%d.%d.%d' 0x${h:6:2} 0x${h:4:2} 0x${h:2:2} 0x${h:0:2})
+                          else
+                            GW=172.17.0.1
+                          fi
+                        fi
+                        echo "Using Docker host: $GW"
+                        export TESTCONTAINERS_HOST_OVERRIDE="$GW"
+                        sh ./mvnw -B test
+                    '''
                 }
             }
             post {
                 always {
                     junit testResults: 'backend/target/surefire-reports/*.xml', allowEmptyResults: true
+                    sh 'docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f || true'
                 }
             }
         }
@@ -163,6 +184,24 @@ pipeline {
                 }
             }
         }
+        stage('TERRAFORM') {
+            when { expression { params.TERRAFORM_ACTION != 'none' } }
+            steps {
+                withCredentials([file(credentialsId: 'aws-learner-lab', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    dir('terraform') {
+                        sh '''
+                            export AWS_DEFAULT_REGION="$AWS_REGION"
+                            terraform init -input=false
+                            case "$TERRAFORM_ACTION" in
+                              plan)    terraform plan -input=false ;;
+                              apply)   terraform apply -input=false -auto-approve ;;
+                              destroy) terraform destroy -input=false -auto-approve ;;
+                            esac
+                        '''
+                    }
+                }
+            }
+        }
         stage('DEPLOY TO EKS') {
             when { expression { params.DOCKER_PUSH && params.DEPLOY_K8S } }
             steps {
@@ -210,15 +249,20 @@ pipeline {
 
                         # Alloy reads its ConfigMap at startup; pick up config changes on redeploy.
                         kc -n achat rollout restart deployment/alloy
+                        # Prometheus reads its ConfigMap at startup; pick up config changes on redeploy.
+                        kc -n achat rollout restart deployment/prometheus
+
                         kc -n achat rollout status deployment/grafana-lgtm --timeout=10m
                         kc -n achat rollout status deployment/alloy --timeout=5m
                         kc -n achat rollout status deployment/mysql --timeout=5m
                         kc -n achat rollout status deployment/backend --timeout=10m
                         kc -n achat rollout status deployment/frontend --timeout=5m
+                        kc -n achat rollout status deployment/prometheus --timeout=5m
+                        kc -n achat rollout status deployment/grafana --timeout=5m
                         kc -n achat get pods,svc
 
                         # Pod readiness does not guarantee AWS has assigned a public hostname yet.
-                        echo "Waiting for the AWS load balancer hostname..."
+                        echo "Waiting for the AWS load balancer hostnames..."
                         kubectl -n achat wait service/frontend \
                           --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m
                         FRONTEND_HOST=$(kubectl -n achat get svc frontend --request-timeout=30s \
@@ -227,8 +271,21 @@ pipeline {
                           echo "AWS load balancer hostname is empty" >&2
                           exit 1
                         fi
+
+                        # Grafana hostname: do not fail the whole deployment if it is slow to appear.
+                        kubectl -n achat wait service/grafana \
+                          --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m || true
+                        GRAFANA_HOST=$(kubectl -n achat get svc grafana --request-timeout=30s \
+                          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || true)
+
                         echo "Application: http://$FRONTEND_HOST"
-                        echo "Grafana: run kubectl -n achat port-forward svc/grafana-lgtm 3001:3000, then open http://localhost:3001"
+                        if [ -n "$GRAFANA_HOST" ]; then
+                          echo "Grafana: http://$GRAFANA_HOST:3000 (admin/admin)"
+                        else
+                          echo "Grafana: hostname not ready yet; run kubectl -n achat port-forward svc/grafana 3000:3000, then open http://localhost:3000"
+                        fi
+                        echo "Prometheus: run kubectl -n achat port-forward svc/prometheus 9090:9090, then open http://localhost:9090"
+                        echo "Grafana LGTM: run kubectl -n achat port-forward svc/grafana-lgtm 3001:3000, then open http://localhost:3001"
                         echo "Swagger: run kubectl -n achat port-forward svc/backend 8090:8089, then open http://localhost:8090/swagger-ui/index.html"
                     '''
                 }

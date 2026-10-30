@@ -21,3 +21,4 @@ crash.log
 
 # Agent
 .agent
+ci/aws-env.sh
