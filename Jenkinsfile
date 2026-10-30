@@ -192,6 +192,18 @@ stage('PUBLISH TO NEXUS') {
                         export KUBECONFIG="$WORKSPACE/.kube/config"
                         aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
 
+                        echo "===== DIAGNOSTIC : PODS ====="
+                        kubectl -n achat get pods -o wide
+
+                        echo "===== DIAGNOSTIC : DEPLOYMENT GRAFANA ====="
+                        kubectl -n achat describe deployment grafana-lgtm
+
+                        echo "===== DIAGNOSTIC : PODS ET LABELS ====="
+                        kubectl -n achat get pods --show-labels
+
+                        echo "===== DIAGNOSTIC : EVENEMENTS ====="
+                        kubectl -n achat get events --sort-by=.lastTimestamp
+
                         # kubectl gives up after a 10 s TLS handshake; retry on slow networks.
                         kc() {
                           for attempt in 1 2 3 4 5; do
