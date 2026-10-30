@@ -76,6 +76,28 @@ Restarting the existing backend is necessary because ConfigMap environment
 variables are read at pod startup. This path keeps the already deployed app
 images; the Jenkins path builds and deploys new images.
 
+## Access shortcuts after deployment
+
+From the repository root on your computer (with Make, AWS CLI, and kubectl installed):
+
+```bash
+# Use your current Learner Lab AWS credentials.
+make kubeconfig
+make port-forward
+```
+
+The second command keeps both tunnels in the foreground. Open Grafana at
+<http://127.0.0.1:3001> and Swagger at
+<http://127.0.0.1:8090/swagger-ui/index.html>. Press **Ctrl+C** to stop both.
+If either tunnel exits, the other is stopped too. Rerun the command after a pod
+replacement or connection failure. These tunnels bind only to your computer's
+loopback address and use kubectl's current context.
+
+Use `make grafana` or `make swagger` for a single tunnel. Override occupied ports
+with `make port-forward GRAFANA_PORT=3002 SWAGGER_PORT=8091`. Other options are
+`NAMESPACE`, `AWS_REGION`, and `EKS_CLUSTER`; see `make help`.
+The commands below remain available if you do not have Make installed.
+
 ## Open Grafana
 
 Run this on your PC in a terminal with AWS credentials and keep it open:

@@ -396,6 +396,12 @@ In order:
 
 Only the frontend is public; MySQL and the API stay internal to the cluster.
 
+After deployment, run `make kubeconfig` followed by `make port-forward` on your
+computer to access Grafana at <http://127.0.0.1:3001> and Swagger at
+<http://127.0.0.1:8090/swagger-ui/index.html>. Keep the terminal open; **Ctrl+C**
+stops both tunnels. See [access shortcuts](observability/README.md#access-shortcuts-after-deployment)
+for prerequisites and port overrides.
+
 ### What to show at validation
 
 | Item | Where |
