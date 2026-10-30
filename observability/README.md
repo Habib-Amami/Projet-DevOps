@@ -34,13 +34,13 @@ ServiceAccount can discover pods and read logs; it cannot read Secrets.
 
 1. Start the Learner Lab and create/update the EKS cluster using `terraform/`.
 2. Update Jenkins' `aws-learner-lab` credential with the current lab credentials.
-3. Commit and push the observability branch. Configure the Jenkins job's SCM
-   branch specifier as `*/Habib/observability` so it loads the updated pipeline.
+3. Make sure the Jenkins job's SCM branch specifier is `*/develop`, so it loads
+   the pipeline with the monitoring deployment.
 4. Run **Build with Parameters** with:
 
    | Parameter | Value |
    | --- | --- |
-   | `BRANCH` | `Habib/observability` |
+   | `BRANCH` | `develop` |
    | `DOCKERHUB_USER` | your Docker Hub namespace |
    | `DOCKER_PUSH` | checked |
    | `DEPLOY_K8S` | checked |
@@ -52,9 +52,6 @@ The deployment stage applies all top-level `k8s/*.yaml`, including monitoring.
 It restarts Alloy to load configuration changes and waits for LGTM, Alloy, and
 the application deployments. The new backend image starts with telemetry enabled.
 The log prints the application URL and port-forward commands for Grafana and Swagger.
-
-After merging into `develop`, select `*/develop` in the SCM settings and
-`develop` for `BRANCH`.
 
 ## Add monitoring to an application already running on EKS
 

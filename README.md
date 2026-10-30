@@ -377,7 +377,8 @@ Two tools share the work:
 In order:
 
 1. **Run CI first** (no AWS needed): push your branch, run Jenkins with
-   `DOCKER_PUSH` checked and `DEPLOY_K8S` unchecked. All stages must be green
+   `DOCKER_PUSH` checked and `DEPLOY_K8S` **unchecked** (it is checked by
+   default, and fails while no cluster exists). All stages must be green
    and the images must appear on Docker Hub.
    → [`ci/README.md`](ci/README.md#run-the-ci-build-test-sonar-nexus-docker-hub)
 2. **Create the cluster**: Start Lab, copy the AWS credentials, `terraform apply`.
@@ -395,7 +396,7 @@ Only the frontend is public; MySQL and the API stay internal to the cluster.
 
 | Item | Where |
 | --- | --- |
-| Git history | GitHub repository, branch `Asma/terraform` |
+| Git history | GitHub repository, branch `develop` |
 | Jenkins | Green pipeline run with every stage |
 | SonarQube | http://localhost:9000, project `achat` |
 | Nexus | http://localhost:8081, `maven-snapshots` → `org/example/achat` |
