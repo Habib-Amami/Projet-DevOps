@@ -285,9 +285,11 @@ unknown ids are returned as `ProblemDetail` JSON with status `404`.
 | Payments | `GET/POST /reglements`, `GET/PUT/DELETE /reglements/{id}`, `GET /reglements/facture/{factureId}`, `GET /reglements/revenue?startDate=yyyy-MM-dd&endDate=yyyy-MM-dd` |
 | Invoices | `GET /facture/retrieve-all-factures`, `GET /facture/retrieve-facture/{id}`, `POST /facture/add-facture`, `PUT /facture/cancel-facture/{id}`, `GET /facture/getFactureByFournisseur/{fournisseurId}`, `PUT /facture/assignOperateurToFacture/{operateurId}/{factureId}`, `GET /facture/pourcentageRecouvrement/{startDate}/{endDate}` |
 
-Request bodies use the entity field names (for example a stock is
-`{"libelleStock": "Main", "qte": 10, "qteMin": 2}`). Dates are sent as
-`yyyy-MM-dd`.
+Most request bodies use the entity field names (for example a stock is
+`{"libelleStock": "Main", "qte": 10, "qteMin": 2}`). Invoice creation uses
+`FactureRequest`, with a positive supplier id and at least one detail:
+`{"idFournisseur": 1, "detailsFacture": [{"idProduit": 1, "qteCommandee": 2, "pourcentageRemise": 0}]}`.
+Dates are sent as `yyyy-MM-dd`.
 
 ## Known API limitations
 
@@ -296,8 +298,7 @@ Request bodies use the entity field names (for example a stock is
   created or edited through the API. The web UI therefore only lists, shows and
   deletes payments.
 - Invoices have no update or delete endpoint; they can only be cancelled
-  (archived). Invoice lines and the supplier of an invoice cannot be set
-  through `add-facture`.
+  (archived).
 - A product's category cannot be set through the API (`categorieProduit` is
   ignored in JSON); only its stock can be assigned.
 - Creating a supplier requires `detailFournisseur.adresse` and

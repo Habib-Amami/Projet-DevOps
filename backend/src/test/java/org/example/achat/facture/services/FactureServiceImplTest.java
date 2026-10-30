@@ -1,12 +1,19 @@
 package org.example.achat.facture.services;
 
+import org.example.achat.facture.dto.DetailFactureRequest;
+import org.example.achat.facture.dto.FactureRequest;
+import org.example.achat.facture.entities.DetailFacture;
 import org.example.achat.facture.entities.Facture;
+import org.example.achat.facture.repositories.DetailFactureRepository;
 import org.example.achat.facture.repositories.FactureRepository;
 import org.example.achat.fournisseurs.exceptions.FournisseurNotFoundException;
+import org.example.achat.fournisseurs.entities.Fournisseur;
 import org.example.achat.fournisseurs.repositories.FournisseurRepository;
 import org.example.achat.operateur.entities.Operateur;
 import org.example.achat.operateur.exceptions.OperateurNotFoundException;
 import org.example.achat.operateur.repositories.OperateurRepository;
+import org.example.achat.produit.entities.Produit;
+import org.example.achat.produit.repositories.ProduitRepository;
 import org.example.achat.reglements.services.ReglementServiceImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +41,10 @@ class FactureServiceImplTest {
     OperateurRepository operateurRepository;
     @Mock
     FournisseurRepository fournisseurRepository;
+    @Mock
+    ProduitRepository produitRepository;
+    @Mock
+    DetailFactureRepository detailFactureRepository;
     @Mock
     ReglementServiceImpl reglementService;
 
@@ -75,6 +86,41 @@ class FactureServiceImplTest {
 
         assertSame(f, result);
         verify(factureRepository).save(f);
+    }
+
+    @Test
+    @DisplayName("createFacture crée la facture et calcule les montants depuis la requête")
+    void createFacture_calculatesAmountsAndSavesDetails() {
+        Fournisseur fournisseur = new Fournisseur();
+        Produit produit = new Produit();
+        produit.setPrix(25f);
+        when(fournisseurRepository.findById(1L)).thenReturn(Optional.of(fournisseur));
+        when(produitRepository.findById(2L)).thenReturn(Optional.of(produit));
+        when(factureRepository.save(any(Facture.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(detailFactureRepository.save(any(DetailFacture.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        FactureRequest request = new FactureRequest(
+                1L,
+                List.of(new DetailFactureRequest(2L, 2, 10))
+        );
+
+        Facture result = factureService.createFacture(request);
+
+        assertSame(fournisseur, result.getFournisseur());
+        assertEquals(45f, result.getMontantFacture());
+        assertEquals(5f, result.getMontantRemise());
+        assertFalse(result.getArchivee());
+        assertNotNull(result.getDateCreationFacture());
+        assertEquals(1, result.getDetailsFacture().size());
+        DetailFacture detail = result.getDetailsFacture().iterator().next();
+        assertSame(produit, detail.getProduit());
+        assertSame(result, detail.getFacture());
+        assertEquals(45f, detail.getPrixTotalDetail());
+        assertEquals(5f, detail.getMontantRemise());
+        verify(factureRepository, times(2)).save(result);
+        verify(detailFactureRepository).save(any(DetailFacture.class));
     }
 
     // ---------- retrieveFacture ----------

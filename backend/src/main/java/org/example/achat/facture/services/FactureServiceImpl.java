@@ -2,6 +2,8 @@ package org.example.achat.facture.services;
 
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.example.achat.facture.dto.FactureRequest;
+import org.example.achat.facture.dto.DetailFactureRequest;
 import org.example.achat.facture.entities.Facture;
 import org.example.achat.facture.entities.DetailFacture;
 import org.example.achat.facture.repositories.FactureRepository;
@@ -13,13 +15,15 @@ import org.example.achat.operateur.exceptions.OperateurNotFoundException;
 import org.example.achat.operateur.repositories.OperateurRepository;
 import org.example.achat.fournisseurs.exceptions.FournisseurNotFoundException;
 import org.example.achat.fournisseurs.repositories.FournisseurRepository;
+import org.example.achat.fournisseurs.entities.Fournisseur;
+import org.example.achat.produit.exceptions.ProduitNotFoundException;
 import org.example.achat.reglements.services.ReglementServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @Slf4j
@@ -53,32 +57,46 @@ public class FactureServiceImpl implements IFactureService {
 		return factureRepository.save(f);
 	}
 
-	/*
-	 * calculer les montants remise et le montant total d'un détail facture
-	 * ainsi que les montants d'une facture
-	 */
-	private Facture addDetailsFacture(Facture f, Set<DetailFacture> detailsFacture) {
+	@Override
+	public Facture createFacture(FactureRequest request) {
+		Fournisseur fournisseur = fournisseurRepository.findById(request.idFournisseur())
+				.orElseThrow(() -> new FournisseurNotFoundException(request.idFournisseur()));
+
+		Date now = new Date();
+		Facture facture = new Facture();
+		facture.setFournisseur(fournisseur);
+		facture.setDateCreationFacture(now);
+		facture.setDateDerniereModificationFacture(now);
+		facture.setArchivee(false);
+		facture.setDetailsFacture(new HashSet<>());
+		facture = factureRepository.save(facture);
+
 		float montantFacture = 0;
 		float montantRemise = 0;
-		for (DetailFacture detail : detailsFacture) {
-			//Récuperer le produit 
-			Produit produit = produitRepository.findById(detail.getProduit().getIdProduit()).get();
-			//Calculer le montant total pour chaque détail Facture
+		for (DetailFactureRequest detailRequest : request.detailsFacture()) {
+			Produit produit = produitRepository.findById(detailRequest.idProduit())
+					.orElseThrow(() -> new ProduitNotFoundException(detailRequest.idProduit()));
+
+			DetailFacture detail = new DetailFacture();
+			detail.setProduit(produit);
+			detail.setFacture(facture);
+			detail.setQteCommandee(detailRequest.qteCommandee());
+			detail.setPourcentageRemise(detailRequest.pourcentageRemise());
+
 			float prixTotalDetail = detail.getQteCommandee() * produit.getPrix();
-			//Calculer le montant remise pour chaque détail Facture
 			float montantRemiseDetail = (prixTotalDetail * detail.getPourcentageRemise()) / 100;
 			float prixTotalDetailRemise = prixTotalDetail - montantRemiseDetail;
 			detail.setMontantRemise(montantRemiseDetail);
 			detail.setPrixTotalDetail(prixTotalDetailRemise);
-			//Calculer le montant total pour la facture
-			montantFacture = montantFacture + prixTotalDetailRemise;
-			//Calculer le montant remise pour la facture
-			montantRemise = montantRemise + montantRemiseDetail;
+
 			detailFactureRepository.save(detail);
+			facture.getDetailsFacture().add(detail);
+			montantFacture = montantFacture + prixTotalDetailRemise;
+			montantRemise = montantRemise + montantRemiseDetail;
 		}
-		f.setMontantFacture(montantFacture);
-		f.setMontantRemise(montantRemise);
-		return f;
+		facture.setMontantFacture(montantFacture);
+		facture.setMontantRemise(montantRemise);
+		return factureRepository.save(facture);
 	}
 
 	@Override
