@@ -12,7 +12,10 @@ data:
   JPA_DDL_AUTO: validate
   # MySQL uses emptyDir in the lab, so the demo data is re-seeded on restart.
   APP_SEED_ENABLED: "true"
+  # Swagger for the cluster demo: kubectl -n achat port-forward svc/backend 8090:8089.
   SPRINGDOC_ENABLED: "true"
-  # No LGTM collector on the cluster.
-  OTEL_METRICS_ENABLED: "false"
-  OTEL_TRACING_ENABLED: "false"
+  # Metrics and traces go to the in-cluster LGTM collector; Alloy collects logs.
+  OTEL_METRICS_ENABLED: "true"
+  OTEL_TRACING_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://grafana-lgtm:4318/v1/metrics
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://grafana-lgtm:4318/v1/traces

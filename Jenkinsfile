@@ -9,17 +9,18 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'Asma/terraform', description: 'Branche à construire')
+        string(name: 'BRANCH', defaultValue: 'develop', description: 'Branche à construire')
         booleanParam(name: 'RUN_SONAR', defaultValue: true, description: 'Analyse SonarQube')
         booleanParam(name: 'PUBLISH_NEXUS', defaultValue: true, description: 'Publier le JAR sur Nexus')
-        string(name: 'SONAR_HOST_URL', defaultValue: 'http://host.docker.internal:9000', description: 'URL SonarQube')
-        string(name: 'NEXUS_HOST', defaultValue: 'host.docker.internal:8081', description: 'Hôte Nexus, sans http://')
+        string(name: 'SONAR_HOST_URL', defaultValue: 'http://sonarqube:9000', description: 'URL SonarQube')
+        string(name: 'NEXUS_HOST', defaultValue: 'nexus:8081', description: 'Hôte Nexus, sans http://')
         booleanParam(name: 'DOCKER_PUSH', defaultValue: true, description: 'Construire et pousser les images sur Docker Hub')
         string(name: 'DOCKERHUB_USER', defaultValue: '', description: 'Utilisateur Docker Hub (préfixe des images)')
-        booleanParam(name: 'DEPLOY_K8S', defaultValue: false, description: 'Déployer sur le cluster EKS (créé par terraform/)')
+        booleanParam(name: 'DEPLOY_K8S', defaultValue: true, description: 'Déployer sur le cluster EKS (créé par terraform/)')
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
         choice(name: 'TERRAFORM_ACTION', choices: ['none', 'plan', 'apply', 'destroy'], description: 'Action Terraform (none = ne rien faire)')
+        string(name: 'EMAIL_TO', defaultValue: '', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
     }
 
     environment {
@@ -41,6 +42,28 @@ pipeline {
                 }
             }
         }
+        stage('BACKEND TESTS') {
+            steps {
+                dir('backend') {
+                    sh 'sh ./mvnw -B test'
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'backend/target/surefire-reports/*.xml', allowEmptyResults: true
+                }
+            }
+        }
+        stage('FRONTEND TESTS') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        npm ci --no-audit --no-fund
+                        npm test -- --watch=false
+                    '''
+                }
+            }
+        }
         stage('ARTIFACT CONSTRUCTION') {
             steps {
                 dir('backend') {
@@ -50,18 +73,6 @@ pipeline {
             post {
                 success {
                     archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
-                }
-            }
-        }
-        stage('UNIT TESTS') {
-            steps {
-                dir('backend') {
-                    sh 'sh ./mvnw -B test'
-                }
-            }
-            post {
-                always {
-                    junit testResults: 'backend/target/surefire-reports/*.xml', allowEmptyResults: true
                 }
             }
         }
@@ -93,6 +104,20 @@ pipeline {
                     groupId: 'org.example',
                     version: '0.0.1-SNAPSHOT',
                     repository: 'maven-snapshots',
+                    credentialsId: 'nexus-credentials',
+                    artifacts: [
+                        [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
+                    ]
+                )
+                // Publish the same JAR under fixed release coordinates for the demo.
+                // maven-releases must allow redeploy so subsequent builds can overwrite it.
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: params.NEXUS_HOST,
+                    groupId: 'org.example',
+                    version: '0.0.1',
+                    repository: 'maven-releases',
                     credentialsId: 'nexus-credentials',
                     artifacts: [
                         [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
@@ -207,12 +232,58 @@ pipeline {
                         kc apply -f "$DEPLOY_DIR/secret.yaml"
                         kc apply -f "$DEPLOY_DIR"
 
+                        # Alloy reads its ConfigMap at startup; pick up config changes on redeploy.
+                        kc -n achat rollout restart deployment/alloy
+                        kc -n achat rollout status deployment/grafana-lgtm --timeout=10m
+                        kc -n achat rollout status deployment/alloy --timeout=5m
                         kc -n achat rollout status deployment/mysql --timeout=5m
                         kc -n achat rollout status deployment/backend --timeout=10m
                         kc -n achat rollout status deployment/frontend --timeout=5m
                         kc -n achat get pods,svc
-                        echo "Application: http://$(kc -n achat get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+
+                        # Pod readiness does not guarantee AWS has assigned a public hostname yet.
+                        echo "Waiting for the AWS load balancer hostname..."
+                        kubectl -n achat wait service/frontend \
+                          --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m
+                        FRONTEND_HOST=$(kubectl -n achat get svc frontend --request-timeout=30s \
+                          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+                        if [ -z "$FRONTEND_HOST" ]; then
+                          echo "AWS load balancer hostname is empty" >&2
+                          exit 1
+                        fi
+                        echo "Application: http://$FRONTEND_HOST"
+                        echo "Grafana: run kubectl -n achat port-forward svc/grafana-lgtm 3001:3000, then open http://localhost:3001"
+                        echo "Swagger: run kubectl -n achat port-forward svc/backend 8090:8089, then open http://localhost:8090/swagger-ui/index.html"
                     '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                def recipients = params.EMAIL_TO?.trim()
+                if (recipients) {
+                    // A mail delivery error must not replace the original CI result.
+                    catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS', catchInterruptions: false,
+                               message: 'Email notification failed; keeping the original build result.') {
+                        emailext(
+                            to: recipients,
+                            subject: "[${currentBuild.currentResult}] ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                            mimeType: 'text/plain',
+                            body: """Result: ${currentBuild.currentResult}
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Branch: ${params.BRANCH}
+
+Build details: ${env.BUILD_URL}
+Console output: ${env.BUILD_URL}console
+"""
+                        )
+                    }
+                } else {
+                    echo 'Email notification skipped: EMAIL_TO is empty.'
                 }
             }
         }

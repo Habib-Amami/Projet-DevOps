@@ -2,11 +2,13 @@ package org.example.achat.facture.services;
 
 import org.example.achat.facture.entities.Facture;
 import org.example.achat.facture.repositories.FactureRepository;
+import org.example.achat.facture.repositories.DetailFactureRepository;
 import org.example.achat.fournisseurs.exceptions.FournisseurNotFoundException;
 import org.example.achat.fournisseurs.repositories.FournisseurRepository;
 import org.example.achat.operateur.entities.Operateur;
 import org.example.achat.operateur.exceptions.OperateurNotFoundException;
 import org.example.achat.operateur.repositories.OperateurRepository;
+import org.example.achat.produit.repositories.ProduitRepository;
 import org.example.achat.reglements.services.ReglementServiceImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,10 @@ class FactureServiceImplTest {
     OperateurRepository operateurRepository;
     @Mock
     FournisseurRepository fournisseurRepository;
+    @Mock
+    DetailFactureRepository detailFactureRepository;
+    @Mock
+    ProduitRepository produitRepository;
     @Mock
     ReglementServiceImpl reglementService;
 

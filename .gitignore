@@ -18,3 +18,6 @@ crash.log
 
 # AWS Learner Lab SSH key
 *.pem
+
+# Agent
+.agent

@@ -2,6 +2,7 @@ package org.example.achat.produit.controllers;
 
 import jakarta.validation.Valid;
 import org.example.achat.produit.dto.ProduitResponse;
+import org.example.achat.produit.dto.ProduitRequest;
 import org.example.achat.produit.entities.Produit;
 import org.example.achat.produit.services.IProduitService;
 import org.springframework.http.HttpStatus;
@@ -13,7 +14,6 @@ import java.util.List;
 
 @RestController
 @Slf4j
-@CrossOrigin("*")
 @RequestMapping("/produits")
 public class ProduitRestController {
 
@@ -39,7 +39,8 @@ public class ProduitRestController {
 	}
 
 	@PostMapping
-	public ResponseEntity<ProduitResponse> addProduit(@Valid @RequestBody Produit produit) {
+	public ResponseEntity<ProduitResponse> addProduit(@Valid @RequestBody ProduitRequest request) {
+		Produit produit = toEntity(request);
 		log.info("Creating product '{}' through REST API", produit.getLibelleProduit());
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(toResponse(produitService.addProduit(produit)));
@@ -55,8 +56,9 @@ public class ProduitRestController {
 	@PutMapping("/{produitId}")
 	public ResponseEntity<ProduitResponse> modifyProduit(
 			@PathVariable Long produitId,
-			@Valid @RequestBody Produit produit) {
+			@Valid @RequestBody ProduitRequest request) {
 		log.info("Updating product {} through REST API", produitId);
+		Produit produit = toEntity(request);
 		produit.setIdProduit(produitId);
 		return ResponseEntity.ok(toResponse(produitService.updateProduit(produit)));
 	}
@@ -68,6 +70,16 @@ public class ProduitRestController {
 		log.info("Assigning product {} to stock {} through REST API", produitId, stockId);
 		produitService.assignProduitToStock(produitId, stockId);
 		return ResponseEntity.ok(toResponse(produitService.retrieveProduit(produitId)));
+	}
+
+	private Produit toEntity(ProduitRequest request) {
+		Produit produit = new Produit();
+		produit.setCodeProduit(request.codeProduit());
+		produit.setLibelleProduit(request.libelleProduit());
+		produit.setPrix(request.prix());
+		produit.setDateCreation(request.dateCreation());
+		produit.setDateDerniereModification(request.dateDerniereModification());
+		return produit;
 	}
 
 	private ProduitResponse toResponse(Produit produit) {

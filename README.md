@@ -263,9 +263,12 @@ Open <http://localhost:3000> and use `admin` / `admin`:
 
 The application exports metrics and traces itself. It does **not** export logs:
 Spring Boot's OTLP logging requires an extra Logback appender, and that would
-still miss nginx, MySQL and container crash output. Alloy is the log collector,
-matching the Alloy DaemonSet used in the cluster. Profiling is intentionally out
+still miss nginx, MySQL and container crash output. Alloy collects Docker logs
+locally and Kubernetes pod logs in the cluster. Profiling is intentionally out
 of scope.
+
+For EKS deployment, Grafana access, and example queries, see
+[`observability/README.md`](observability/README.md).
 
 ## Local development with native tooling
 
@@ -325,6 +328,11 @@ Interactive documentation is available at
 <http://localhost:8089/v3/api-docs>. Known API limitations are documented in the
 [backend README](backend/README.md#known-api-limitations).
 
+Write endpoints accept validated request DTOs rather than persistence entities.
+Existing frontend field names are preserved; generated IDs and entity
+relationships cannot be bound from the request body. Payment creation selects
+an existing invoice using `factureId`.
+
 ## Testing and CI
 
 Run the same checks as CI locally:
@@ -374,7 +382,8 @@ Two tools share the work:
 In order:
 
 1. **Run CI first** (no AWS needed): push your branch, run Jenkins with
-   `DOCKER_PUSH` checked and `DEPLOY_K8S` unchecked. All stages must be green
+   `DOCKER_PUSH` checked and `DEPLOY_K8S` **unchecked** (it is checked by
+   default, and fails while no cluster exists). All stages must be green
    and the images must appear on Docker Hub.
    → [`ci/README.md`](ci/README.md#run-the-ci-build-test-sonar-nexus-docker-hub)
 2. **Create the cluster**: Start Lab, copy the AWS credentials, `terraform apply`.
@@ -392,7 +401,7 @@ Only the frontend is public; MySQL and the API stay internal to the cluster.
 
 | Item | Where |
 | --- | --- |
-| Git history | GitHub repository, branch `Asma/terraform` |
+| Git history | GitHub repository, branch `develop` |
 | Jenkins | Green pipeline run with every stage |
 | SonarQube | http://localhost:9000, project `achat` |
 | Nexus | http://localhost:8081, `maven-snapshots` → `org/example/achat` |
