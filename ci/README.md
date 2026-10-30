@@ -259,7 +259,7 @@ In Jenkins:
 3. Under **Pipeline**, select **Pipeline script from SCM**.
 4. Use:
    - SCM: Git
-   - Repository URL: `https://github.com/Habib-Amami/Projet-DevOps.git`
+   - Repository URL: `https://github.com/Habib-Amami/igl5-g7-achat.git`
    - Branch specifier: `*/Asma/terraform` (use `*/develop` once the branch is merged)
    - Script path: `Jenkinsfile`
 5. Save the job.

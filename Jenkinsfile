@@ -31,7 +31,7 @@ pipeline {
     stages {
         stage('CHECKOUT GIT') {
             steps {
-                git branch: params.BRANCH, url: 'https://github.com/Habib-Amami/Projet-DevOps.git'
+                git branch: params.BRANCH, url: 'https://github.com/Habib-Amami/igl5-g7-achat.git'
             }
         }
         stage('MVN CLEAN') {
