@@ -94,37 +94,30 @@ pipeline {
                 }
             }
         }
-        stage('PUBLISH TO NEXUS') {
-            when { expression { params.PUBLISH_NEXUS } }
-            steps {
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: params.NEXUS_HOST,
-                    groupId: 'org.example',
-                    version: '0.0.1-SNAPSHOT',
-                    repository: 'maven-snapshots',
-                    credentialsId: 'nexus-credentials',
-                    artifacts: [
-                        [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
-                    ]
-                )
-                // Publish the same JAR under fixed release coordinates for the demo.
-                // maven-releases must allow redeploy so subsequent builds can overwrite it.
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: params.NEXUS_HOST,
-                    groupId: 'org.example',
-                    version: '0.0.1',
-                    repository: 'maven-releases',
-                    credentialsId: 'nexus-credentials',
-                    artifacts: [
-                        [artifactId: 'achat', classifier: '', file: 'backend/target/achat-0.0.1-SNAPSHOT.jar', type: 'jar']
-                    ]
-                )
-            }
-        }
+        
+stage('PUBLISH TO NEXUS') {
+    when { expression { params.PUBLISH_NEXUS } }
+    steps {
+        nexusArtifactUploader(
+            nexusVersion: 'nexus3',
+            protocol: 'http',
+            nexusUrl: params.NEXUS_HOST,
+            groupId: 'org.example',
+            version: '0.0.1-SNAPSHOT',
+            repository: 'maven-snapshots',
+            credentialsId: 'nexus-credentials',
+            artifacts: [
+                [
+                    artifactId: 'achat',
+                    classifier: '',
+                    file: 'backend/target/achat-0.0.1-SNAPSHOT.jar',
+                    type: 'jar'
+                ]
+            ]
+        )
+    }
+}
+
         stage('DOCKER BUILD') {
             when { expression { params.DOCKER_PUSH } }
             steps {
