@@ -202,6 +202,36 @@ has no end-user authentication, so the backend must remain internal
 `SPRINGDOC_ENABLED=true`; set it to `true` in the cluster only if you still want
 to reach it with `kubectl port-forward`.
 
+### CSRF and CORS review
+
+The demo API permits anonymous requests. It does not authenticate callers through
+session cookies, HTTP Basic, form login, or another browser-managed credential.
+CSRF protection remains intentionally disabled under those assumptions. Merely
+setting a stateless session policy would not make cookie-authenticated requests
+safe from CSRF. Revisit this decision before adding authentication that browsers
+attach automatically.
+
+For the CSRF hotspot in SonarQube, use the following review rationale after
+checking that these assumptions still hold for the deployed environment:
+
+> All API requests are anonymous. Form login and HTTP Basic are disabled, the
+> security chain is stateless, and no cookie establishes an authenticated user.
+> There is no browser-managed authenticated identity to reuse through CSRF.
+> Reassess this configuration if cookie-based authentication or HTTP Basic is added.
+
+The code keeps the explicit CSRF setting so this decision remains visible.
+The hotspot still requires a manual review in SonarQube; a code comment does not
+mark it reviewed. This configuration does not provide end-user access control.
+
+Controllers do not enable CORS. Angular uses `/api` through the development proxy
+or nginx, and Swagger calls its own backend origin. No cross-origin permission is
+needed for these flows. Cross-origin preflight requests receive no permission;
+ordinary cross-origin responses have no `Access-Control-Allow-Origin` header.
+CORS is a browser response-sharing policy, not API authentication or a firewall.
+
+References: [Spring Security CSRF considerations](https://docs.spring.io/spring-security/reference/features/exploits/csrf.html)
+and [Spring transaction rollback rules](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
+
 ## Database and seed data
 
 - Flyway owns the schema: `db/migration/V1__init.sql` is the baseline and future
@@ -212,6 +242,8 @@ to reach it with `kubectl port-forward`.
   at `V1` (`baseline-on-migrate`); fresh databases run `V1` normally.
 - Seeding runs only when `APP_SEED_ENABLED=true`; it is enabled by the root
   Compose stack and disabled by default.
+- Seed-file I/O or JSON parsing failures roll back the entire seed transaction,
+  as do runtime failures. Earlier inserts are not committed after a partial run.
 - Seed files live in `src/main/resources/seed/` (`stocks.json`,
   `products.json`, `categories.json`, `fournisseurs.json`, `secteurs.json`,
   `operateurs.json`, `factures.json`) and are loaded by
@@ -285,21 +317,39 @@ unknown ids are returned as `ProblemDetail` JSON with status `404`.
 | Payments | `GET/POST /reglements`, `GET/PUT/DELETE /reglements/{id}`, `GET /reglements/facture/{factureId}`, `GET /reglements/revenue?startDate=yyyy-MM-dd&endDate=yyyy-MM-dd` |
 | Invoices | `GET /facture/retrieve-all-factures`, `GET /facture/retrieve-facture/{id}`, `POST /facture/add-facture`, `PUT /facture/cancel-facture/{id}`, `GET /facture/getFactureByFournisseur/{fournisseurId}`, `PUT /facture/assignOperateurToFacture/{operateurId}/{factureId}`, `GET /facture/pourcentageRecouvrement/{startDate}/{endDate}` |
 
-Request bodies use the entity field names (for example a stock is
+Request bodies use validated request DTOs with the existing field names (for example a stock is
 `{"libelleStock": "Main", "qte": 10, "qteMin": 2}`). Dates are sent as
 `yyyy-MM-dd`.
 
+DTOs explicitly map writable fields to new entities inside the controllers.
+Create requests cannot select database-generated IDs, and update IDs come from
+the URL. Entity associations are not bound from nested JSON. Supplier details
+use a nested DTO with validated address, matricule, and optional email/date;
+their database ID and supplier back-reference cannot be submitted.
+
+Payment creation uses an existing invoice's `factureId`, for example:
+
+```json
+{
+  "montantPaye": 20,
+  "montantRestant": 80,
+  "payee": false,
+  "dateReglement": "2026-10-29",
+  "factureId": 1
+}
+```
+
+An unknown invoice returns `404`. On payment update, `factureId` can be omitted:
+the existing invoice association is preserved. The web UI currently exposes
+payment listing, details, deletion, filtering, and revenue queries.
+
 ## Known API limitations
 
-- `POST`/`PUT /reglements` always answer `400`: `Reglement.facture` is required
-  (`@NotNull`) but ignored in JSON (`@JsonIgnore`), so a payment cannot be
-  created or edited through the API. The web UI therefore only lists, shows and
-  deletes payments.
 - Invoices have no update or delete endpoint; they can only be cancelled
   (archived). Invoice lines and the supplier of an invoice cannot be set
   through `add-facture`.
-- A product's category cannot be set through the API (`categorieProduit` is
-  ignored in JSON); only its stock can be assigned.
+- A product's category cannot be set through the request DTO; only its stock
+  can be assigned, through `PUT /produits/{id}/stock/{stockId}`.
 - Creating a supplier requires `detailFournisseur.adresse` and
   `detailFournisseur.matricule`. On update, omitting `detailFournisseur` keeps
   the existing details.

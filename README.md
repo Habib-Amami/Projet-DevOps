@@ -328,6 +328,11 @@ Interactive documentation is available at
 <http://localhost:8089/v3/api-docs>. Known API limitations are documented in the
 [backend README](backend/README.md#known-api-limitations).
 
+Write endpoints accept validated request DTOs rather than persistence entities.
+Existing frontend field names are preserved; generated IDs and entity
+relationships cannot be bound from the request body. Payment creation selects
+an existing invoice using `factureId`.
+
 ## Testing and CI
 
 Run the same checks as CI locally:

@@ -78,7 +78,7 @@ public class DevelopmentDataSeeder implements ApplicationRunner {
 	}
 
 	@Override
-	@Transactional
+	@Transactional(rollbackFor = IOException.class)
 	public void run(ApplicationArguments args) throws IOException {
 		seedStocks();
 		seedCategories();

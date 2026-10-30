@@ -5,8 +5,8 @@ import { environment } from '../../../environments/environment';
 import { Reglement } from '../models/reglement.model';
 
 /**
- * `POST`/`PUT /reglements` are not exposed: the backend requires a `facture` that its JSON mapping ignores,
- * so those calls always fail validation.
+ * The UI exposes payment reads and deletion. The backend also accepts request
+ * DTOs for creation/update; creation selects an existing invoice with factureId.
  */
 @Injectable({ providedIn: 'root' })
 export class ReglementService {

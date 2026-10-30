@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.achat.stock.dto.StockResponse;
+import org.example.achat.stock.dto.StockRequest;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,6 @@ import java.util.List;
 @RestController
 @Slf4j
 @RequestMapping("/stocks")
-@CrossOrigin("*")
 @Tag(name = "Stocks", description = "Stock inventory management")
 public class StockRestController {
 
@@ -53,7 +53,8 @@ public class StockRestController {
 	@PostMapping
 	@Operation(summary = "Create a stock", description = "Creates a stock with a label and quantity thresholds.")
 	@ApiResponse(responseCode = "201", description = "Stock created")
-	public ResponseEntity<StockResponse> addStock(@Valid @RequestBody Stock stock) {
+	public ResponseEntity<StockResponse> addStock(@Valid @RequestBody StockRequest request) {
+		Stock stock = toEntity(request);
 		log.info("Creating stock '{}' through REST API", stock.getLibelleStock());
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(toResponse(stockService.addStock(stock)));
@@ -79,10 +80,19 @@ public class StockRestController {
 	})
 	public ResponseEntity<StockResponse> modifyStock(
 			@PathVariable Long stockId,
-			@Valid @RequestBody Stock stock) {
+			@Valid @RequestBody StockRequest request) {
 		log.info("Updating stock {} through REST API", stockId);
+		Stock stock = toEntity(request);
 		stock.setIdStock(stockId);
 		return ResponseEntity.ok(toResponse(stockService.updateStock(stock)));
+	}
+
+	private Stock toEntity(StockRequest request) {
+		Stock stock = new Stock();
+		stock.setLibelleStock(request.libelleStock());
+		stock.setQte(request.qte());
+		stock.setQteMin(request.qteMin());
+		return stock;
 	}
 
 	private StockResponse toResponse(Stock stock) {
