@@ -303,6 +303,10 @@ Stages and what to expect:
 | `DOCKER PUSH` | Pushes both images | hub.docker.com, your repositories |
 | `DEPLOY TO EKS` | Deploys the app, Grafana LGTM, and Alloy (only with `DEPLOY_K8S`) | App URL and Grafana/Swagger port-forward commands printed at the end of the log |
 
+The backend test stage generates a JaCoCo XML report at
+`backend/target/site/jacoco/jacoco.xml`. SonarQube imports this report during
+analysis; the displayed coverage is backend coverage.
+
 Do not use `RUN_SONAR=false` or `PUBLISH_NEXUS=false` as a substitute for the
 mandatory setup in this project.
 

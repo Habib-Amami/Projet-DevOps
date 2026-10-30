@@ -9,17 +9,17 @@ pipeline {
     }
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'develop', description: 'Branche à construire')
+        string(name: 'BRANCH', defaultValue: 'Asma/Final', description: 'Branche à construire')
         booleanParam(name: 'RUN_SONAR', defaultValue: true, description: 'Analyse SonarQube')
         booleanParam(name: 'PUBLISH_NEXUS', defaultValue: true, description: 'Publier le JAR sur Nexus')
         string(name: 'SONAR_HOST_URL', defaultValue: 'http://sonarqube:9000', description: 'URL SonarQube')
         string(name: 'NEXUS_HOST', defaultValue: 'nexus:8081', description: 'Hôte Nexus, sans http://')
         booleanParam(name: 'DOCKER_PUSH', defaultValue: true, description: 'Construire et pousser les images sur Docker Hub')
-        string(name: 'DOCKERHUB_USER', defaultValue: '', description: 'Utilisateur Docker Hub (préfixe des images)')
+        string(name: 'DOCKERHUB_USER', defaultValue: 'raisasma99859', description: 'Utilisateur Docker Hub (préfixe des images)')
         booleanParam(name: 'DEPLOY_K8S', defaultValue: true, description: 'Déployer sur le cluster EKS (créé par terraform/)')
         string(name: 'EKS_CLUSTER', defaultValue: 'achat-eks', description: 'Nom du cluster EKS')
         string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Région AWS du cluster')
-        string(name: 'EMAIL_TO', defaultValue: '', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
+        string(name: 'EMAIL_TO', defaultValue: 'rais.asma99@gmail.com', description: 'Destinataires email séparés par des virgules (vide = désactivé)')
     }
 
     environment {
@@ -81,6 +81,10 @@ pipeline {
                 dir('backend') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                         sh '''
+                            test -s target/site/jacoco/jacoco.xml || {
+                              echo "JaCoCo XML report is missing; make sure backend tests ran with JaCoCo enabled." >&2
+                              exit 1
+                            }
                             sh ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar \
                               -Dsonar.projectKey=achat \
                               -Dsonar.projectName=achat \
