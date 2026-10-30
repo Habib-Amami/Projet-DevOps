@@ -360,18 +360,41 @@ payment listing, details, deletion, filtering, and revenue queries.
 ## Testing
 
 ```bash
-# Unit and slice tests
+# All backend tests, including real MySQL integration tests
 ./mvnw -B test
+
+# Unit and controller slice tests only (Docker not required)
+./mvnw -B '-Dtest=*ServiceImplTest,*ControllerTest,RequestDtoContractTest,SecurityConfigTest,DevelopmentDataSeederTransactionTest' test
+
+# Real MySQL persistence, query, API workflow, and startup tests only
+./mvnw -B '-Dtest=*IntegrationTest,AchatApplicationTests' test
 
 # Full verification, as used by CI
 ./mvnw -B clean verify
 ```
 
-Testcontainers starts a MySQL 8.4 container for the context test, so a running
-Docker daemon is required. Grafana LGTM is not started by tests (they disable
-metrics and tracing export); it is only added when you run
-`TestAchatApplication` for local development. In Jenkins, Testcontainers reaches
-its containers through `host.docker.internal` (see `ci/compose.yaml`). Surefire XML reports are written to
+| Tests | Dependencies and behavior |
+| --- | --- |
+| Service unit tests | Mockito repositories; cover stocks, products, operators, invoices, payments, suppliers, sectors, and categories, including missing records and relationship preservation on update. |
+| Controller, DTO, and security tests | Real MVC validation/serialization (and security filters in `SecurityConfigTest`), with services replaced by Mockito. |
+| `DevelopmentDataSeederTransactionTest` | Real transaction interception with mocked repositories and transaction manager; checks rollback selection on I/O/JSON failures. |
+| `PersistenceIntegrationTest` | Real MySQL: committed relationships, supplier detail cascade, invoice serialization data, foreign-key deletion restrictions, and permitted deletion after moving/removing references. |
+| `RevenueQueriesIntegrationTest` | Real MySQL: inclusive date boundaries, archived invoice exclusion, empty payment revenue, recovery percentage, invoice filtering, and low-stock thresholds. |
+| `ApiWorkflowIntegrationTest` | MockMvc through real controllers, security, services, and MySQL; covers create/read/update/delete workflows, supplier-sector assignment, and payment history/revenue after invoice archival. No Mockito. |
+| `AchatApplicationTests` | Application startup against the same MySQL test service. |
+
+The database tests share `MySqlIntegrationSupport` and a MySQL 8.4 Testcontainers
+service, so a running Docker daemon is required. Their configuration explicitly
+loads `src/test/resources/application-integration.properties` instead of the
+normal application configuration: it does not import the repository-root `.env`,
+disables seeding/telemetry, and keeps Flyway migrations plus Hibernate schema
+validation enabled. Records are deleted in foreign-key order before and after
+each test. These tests do not wrap API requests in a test transaction, so they
+exercise real commit boundaries and detached entity access.
+
+Grafana LGTM is only added when you run `TestAchatApplication` for local
+development. In Jenkins, Testcontainers reaches its containers through
+`host.docker.internal` (see `ci/compose.yaml`). Surefire XML reports are written to
 `target/surefire-reports/` and published by the Jenkins pipeline. The Docker
 image build skips tests (`-DskipTests`) because CI already runs them.
 
